@@ -57,9 +57,9 @@ const CONFIG = {
   expRealmJumpInterval: 9,     // 几级一个大境界
 
   // ---- 毛产出 ----
-  stoneBase: 0.02,             // 毛基础值
-  stoneLevelGrowth: 1.03,      // 每级增长
-  stoneRealmJump: 1.25,        // 每大境界跳跃倍率
+  stoneBase: 0.05,             // 毛基础值
+  stoneLevelGrowth: 1.02,      // 每级增长
+  stoneRealmJump: 1.18,        // 每大境界跳跃倍率
 
   // ---- 忠诚 ----
   loyaltyDailyGain: 0.5,       // 每天自然恢复
@@ -3699,8 +3699,8 @@ function openMemoDetail(idx){
   let title='奏 章';if(m.isOffline)title='闭 关 总 结';if(m.isAutoBank)title='副 掌 门 汇 总';
   let html='<div class="modal-title">'+title+'</div>';
   html+='<div class="modal-sub">'+fmtClock(m.time)+(m.isAutoBank?(' · 共 '+m.autoCount+' 份 · 已扣 '+VICE_CUT*100+'% 抽成'):(' · 间隔 '+fmtDur(m.interval/1000)))+'</div>';
-  if(top){const p=getP(top),r=realmOf(top.level),apt=getApt(top),root=getRoot(top);
-    html+='<div class="report-from">...<div class="rm-title">'+p.n+' · '+apt.n+'资质 · '+root.ic+root.n+'灵根 · '+sp.ic+sp.n+' · '+d.age+'岁<br><span style="color:var(--dimmer);font-size:calc(11px * var(--fs-scale))">'+p.desc+'</span></div></div>';
+  if(top){const p=getP(top),r=realmOf(top.level),apt=getApt(top),root=getRoot(top),sp=getSpecialty(top);
+    html+='<div class="report-from"><div class="report-avatar">'+p.ic+'</div><div class="report-meta"><div class="rm-name">'+top.name+(top.chosen?' ✨':'')+'</div><div class="rm-title">'+r.name+' · '+p.n+' · '+apt.n+'资质 · '+root.ic+root.n+'灵根 · '+sp.ic+sp.n+' · '+top.age+'岁<br><span style="color:var(--dimmer);font-size:calc(11px * var(--fs-scale))">'+p.desc+'</span></div></div></div>';
   }
   let body='';
   if(m.isOffline)body+='<span class="rl">掌门闭关期间，弟子们勤修不辍。</span>';
