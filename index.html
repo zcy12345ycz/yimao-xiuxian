@@ -22,6 +22,7 @@ var _hmt = _hmt || [];
 </script>
 </head>
 <body>
+<audio id="bgm" loop src="bgm.mp3" preload="auto"></audio>
 
 <div class="screen" id="splash">
   <div class="splash-glow"></div>
@@ -97,7 +98,7 @@ var _hmt = _hmt || [];
       <span class="sep">·</span>
       <span>第 <span class="sv" id="eraNum">1</span> 纪</span>
       <span class="sep">·</span>
-      <span>立派 <span class="sv" id="playDays">1</span> 天</span>
+      <span>立派 <span class="sv" id="playDays">1</span> 天</span><span class="sep">·</span><span>距14亿 <span class="sv" id="topGoalText">0.00%</span></span>
     </div>
   </header>
 
@@ -277,23 +278,136 @@ var _hmt = _hmt || [];
       <div class="char-area" id="charArea">
         <div class="halo"></div>
         <div class="beam"></div>
-        <svg class="char-svg" id="charSvg" viewBox="0 0 180 220">
-          <ellipse cx="90" cy="200" rx="55" ry="8" fill="rgba(122,184,196,.15)"/>
-          <path d="M55,195 Q50,155 60,120 Q70,100 90,95 Q110,100 120,120 Q130,155 125,195 Z" fill="rgba(36,61,53,.95)" stroke="rgba(122,184,196,.5)" stroke-width="1.2"/>
-          <ellipse cx="90" cy="150" rx="16" ry="9" fill="rgba(122,184,196,.35)"/>
-          <ellipse cx="90" cy="78" rx="22" ry="26" fill="rgba(41,70,60,.95)" stroke="rgba(122,184,196,.6)" stroke-width="1.2"/>
-          <path d="M68,68 Q90,45 112,68 Q108,52 90,48 Q72,52 68,68 Z" fill="rgba(23,42,36,.98)" stroke="rgba(230,196,115,.5)" stroke-width="1"/>
-          <circle cx="90" cy="42" r="5" fill="rgba(230,196,115,.8)"/>
-          <path d="M78,80 Q84,84 88,80" stroke="rgba(232,238,240,.7)" stroke-width="1.3" fill="none" stroke-linecap="round"/>
-          <path d="M92,80 Q96,84 102,80" stroke="rgba(232,238,240,.7)" stroke-width="1.3" fill="none" stroke-linecap="round"/>
-          <circle cx="90" cy="145" r="6" fill="var(--realm)" opacity=".7"><animate attributeName="opacity" values=".4;.9;.4" dur="2.5s" repeatCount="indefinite"/></circle>
-          <circle cx="90" cy="145" r="12" fill="none" stroke="var(--realm)" stroke-width=".6" opacity=".35"><animate attributeName="r" values="10;15;10" dur="2.5s" repeatCount="indefinite"/></circle>
-        </svg>
+        <svg class="char-svg" id="charSvg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="haloGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="rgba(122,184,196,.35)"/>
+      <stop offset="55%"  stop-color="rgba(122,184,196,.10)"/>
+      <stop offset="100%" stop-color="rgba(122,184,196,0)"/>
+    </radialGradient>
+    <linearGradient id="robeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="rgba(72,118,102,1)"/>
+      <stop offset="100%" stop-color="rgba(38,68,58,1)"/>
+    </linearGradient>
+    </linearGradient>
+    <linearGradient id="sleeveGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="rgba(62,102,88,1)"/>
+      <stop offset="100%" stop-color="rgba(30,54,46,1)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 身后灵气光晕 -->
+  <ellipse cx="100" cy="120" rx="92" ry="105" fill="url(#haloGrad)" opacity=".7"/>
+
+  <!-- 莲台底座 -->
+  <ellipse cx="100" cy="222" rx="72" ry="6" fill="rgba(122,184,196,.18)"/>
+  <path d="M32,218 Q50,229 100,229 Q150,229 168,218 Q150,213 100,213 Q50,213 32,218 Z"
+        fill="rgba(230,196,115,.14)" stroke="rgba(230,196,115,.4)" stroke-width=".8"/>
+
+  <!-- 身后飘带（左） -->
+  <g class="ribbon-l">
+    <path d="M80,88 Q60,138 66,188 Q70,206 58,216"
+          fill="none" stroke="rgba(230,196,115,.5)" stroke-width="1.4" stroke-linecap="round"/>
+  </g>
+  <!-- 身后飘带（右） -->
+  <g class="ribbon-r">
+    <path d="M120,88 Q140,138 134,188 Q130,206 142,216"
+          fill="none" stroke="rgba(230,196,115,.5)" stroke-width="1.4" stroke-linecap="round"/>
+  </g>
+
+  <!-- 盘坐的腿（自然下垂衣摆） -->
+  <path d="M60,175 
+           Q30,190 35,215 
+           C 55,225 75,218 100,225 
+           C 125,218 145,225 165,215 
+           Q170,190 140,175 
+           Q100,190 60,175 Z"
+        fill="url(#robeGrad)" stroke="rgba(140,200,210,.7)" stroke-width="1.1"/>
+
+  <!-- 衣摆内部褶皱细节（增加层次感） -->
+  <path d="M60,200 Q80,210 100,205" stroke="rgba(122,184,196,.3)" stroke-width="0.8" fill="none"/>
+  <path d="M100,205 Q120,210 140,200" stroke="rgba(122,184,196,.3)" stroke-width="0.8" fill="none"/>
+  <path d="M80,215 Q100,218 120,215" stroke="rgba(122,184,196,.2)" stroke-width="0.8" fill="none"/>
+
+  <!-- 交叠的足部细节 -->
+  <path d="M74,200 Q88,208 100,208 Q112,208 126,200 Q116,210 100,210 Q84,210 74,200 Z"
+        fill="rgba(22,40,34,1)" stroke="rgba(230,196,115,.28)" stroke-width=".6"/>
+
+  <!-- 道袍主体 -->
+  <path d="M72,80 Q58,112 56,152 Q52,188 62,206 Q80,214 100,214 Q120,214 138,206
+           Q148,188 144,152 Q142,112 128,80 Q114,72 100,72 Q86,72 72,80 Z"
+        fill="url(#robeGrad)" stroke="rgba(122,184,196,.55)" stroke-width="1.2"/>
+
+  <!-- 对襟中线 -->
+  <path d="M100,80 L100,208" stroke="rgba(122,184,196,.28)" stroke-width=".8" fill="none"/>
+
+  <!-- 领口 -->
+  <path d="M82,82 Q100,96 118,82 Q110,90 100,92 Q90,90 82,82 Z"
+        fill="rgba(20,38,32,.9)" stroke="rgba(230,196,115,.45)" stroke-width=".7"/>
+
+  <!-- 左袖 -->
+  <path d="M72,90 Q56,122 60,158 Q64,172 54,180 Q70,176 78,158 Q84,128 84,102 Z"
+        fill="url(#sleeveGrad)" stroke="rgba(122,184,196,.4)" stroke-width=".9"/>
+  <!-- 右袖 -->
+  <path d="M128,90 Q144,122 140,158 Q136,172 146,180 Q130,176 122,158 Q116,128 116,102 Z"
+        fill="url(#sleeveGrad)" stroke="rgba(122,184,196,.4)" stroke-width=".9"/>
+
+  <!-- 结印的手 -->
+  <ellipse cx="100" cy="155" rx="22" ry="9"
+           fill="rgba(48,84,72,1)" stroke="rgba(122,184,196,.55)" stroke-width=".9"/>
+  <path d="M82,155 Q100,149 118,155" stroke="rgba(230,196,115,.35)" stroke-width=".6" fill="none"/>
+  <path d="M86,159 Q100,155 114,159" stroke="rgba(230,196,115,.35)" stroke-width=".6" fill="none"/>
+
+  <!-- 丹田金丹 -->
+  <circle cx="100" cy="155" r="5" fill="rgba(230,196,115,.95)" opacity=".85">
+    <animate attributeName="opacity" values=".45;.95;.45" dur="3s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="100" cy="155" r="10" fill="none" stroke="rgba(230,196,115,.55)" stroke-width=".8" opacity=".5">
+    <animate attributeName="r" values="8;15;8" dur="3s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- 脖颈 -->
+  <path d="M92,66 Q100,71 108,66 L108,78 Q100,82 92,78 Z" fill="rgba(48,84,72,1)"/>
+
+  <!-- 头 -->
+  <ellipse cx="100" cy="50" rx="20" ry="23"
+           fill="rgba(56,96,82,1)" stroke="rgba(122,184,196,.65)" stroke-width="1"/>
+
+  <!-- 发髻 -->
+  <path d="M82,36 Q88,18 100,16 Q112,18 118,36 Q110,28 100,28 Q90,28 82,36 Z"
+        fill="rgba(20,38,32,.98)" stroke="rgba(230,196,115,.45)" stroke-width=".7"/>
+
+  <!-- 发簪 -->
+  <line x1="80" y1="30" x2="120" y2="26"
+        stroke="rgba(230,196,115,.95)" stroke-width="1.8" stroke-linecap="round"/>
+  <circle cx="120" cy="26" r="2.5" fill="rgba(230,196,115,1)"/>
+
+  <!-- 顶珠 -->
+  <circle cx="100" cy="13" r="4" fill="rgba(230,196,115,.95)">
+    <animate attributeName="opacity" values=".7;1;.7" dur="2.5s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- 闭目 -->
+  <path d="M86,50 Q90,54 94,50" stroke="rgba(232,238,240,.9)" stroke-width="1.4"
+        fill="none" stroke-linecap="round"/>
+  <path d="M106,50 Q110,54 114,50" stroke="rgba(232,238,240,.9)" stroke-width="1.4"
+        fill="none" stroke-linecap="round"/>
+
+  <!-- 眉心朱砂 -->
+  <circle cx="100" cy="40" r="1.6" fill="rgba(230,120,120,.85)"/>
+
+  <!-- 头顶灵气环 -->
+  <g class="halo-ring" style="transform-origin:100px 13px;">
+    <ellipse cx="100" cy="13" rx="24" ry="6" fill="none"
+             stroke="rgba(230,196,115,.55)" stroke-width="1"/>
+  </g>
+</svg>
       </div>
     </div>
   </main>
 
-  <footer class="hud-bottom">
+  <footer class="hud-bottom" style="position:relative;">
+    <button id="toggleHudBtn" style="position:absolute; top:-28px; right:10px; font-size:12px; background:transparent; border:1px dashed var(--dim); color:var(--dim); border-radius:8px; padding:2px 8px; cursor:pointer; z-index:99;">▼ 收起详情</button>
     <div class="tianxiang-row" id="tianxiangRow">
       <span class="tx-ic">☁️</span>
       <span class="tx-name">平常日</span>

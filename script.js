@@ -26,7 +26,7 @@
  * ============================================================ */
 
 /* ============ 版本 ============ */
-const GAME_VERSION='v0.3.4';
+const GAME_VERSION='v0.4.4';
 const GAME_AUTHOR='Zhao | Struct. E.';
 const CURRENT_SAVE_VERSION=4;
 let DEC_LONG_FORMAT=false;
@@ -1192,7 +1192,7 @@ const AudioSys={ctx:null,enabled:true,
 
 /* ============ DOM ============ */
 const el={
-  splash:$('splash'),create:$('create'),game:$('game'),
+  splash:$('splash'),topGoalText:$('topGoalText'),create:$('create'),game:$('game'),
   nameInput:$('nameInput'),randomNameBtn:$('randomNameBtn'),
   createConfirm:$('createConfirm'),startBtn:$('startBtn'),importFromCreate:$('importFromCreate'),
   splashVersion:$('splashVersion'),splashStory:$('splashStory'),
@@ -1235,7 +1235,19 @@ const el={
   firstRecruit:$('firstRecruit'),frSkip:$('frSkip')
 };
 let lastTopSi=-1;
-function applyTheme(c){document.documentElement.style.setProperty('--realm',c);document.documentElement.style.setProperty('--realm-15',hexToRgba(c,.15));document.documentElement.style.setProperty('--realm-30',hexToRgba(c,.3));document.documentElement.style.setProperty('--realm-50',hexToRgba(c,.5))}
+function applyTheme(c){
+  document.documentElement.style.setProperty('--realm',c);
+  document.documentElement.style.setProperty('--realm-15',hexToRgba(c,.15));
+  document.documentElement.style.setProperty('--realm-30',hexToRgba(c,.3));
+  document.documentElement.style.setProperty('--realm-50',hexToRgba(c,.5));
+  
+  // 新增：动态改变游戏主背景的光晕色调，让大境界突破后整个世界颜色跟着变
+  const gameEl = document.getElementById('game');
+  if(gameEl){
+    const bg = `radial-gradient(ellipse at 50% 32%, ${hexToRgba(c, .25)} 0%, transparent 50%), linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-mid) 55%, var(--bg-light) 100%)`;
+    gameEl.style.background = bg;
+  }
+}
 function applyFontSize(){document.documentElement.style.setProperty('--fs-scale',String(FS_VALUE()))}
 function renderSplashStory(){if(el.splashStory)el.splashStory.innerHTML=t('splash_story')}
 
@@ -2659,10 +2671,15 @@ function renderUI(){
     if(el.topDiscipleInjured)el.topDiscipleInjured.style.display=isInjured(top)?'inline-block':'none';
     if(el.topDiscipleAging)el.topDiscipleAging.style.display=agingWarn(top)?'inline-block':'none';
     if(el.topDiscipleAway)el.topDiscipleAway.style.display=isOnExpedition(top)?'inline-block':'none';
-    const subInRealm=top.level%9;
-    el.barSubLeft.textContent=r.short+' '+CN[subInRealm]+'重';
-    const estSec=estimateTimeTo(top,top.level+1);
-    el.barSubRight.textContent='距突破 约 '+fmtDur(estSec);
+      const subInRealm=top.level%9;
+      el.barSubLeft.textContent=r.short+' '+CN[subInRealm]+'重';
+      
+      // 新增：缓存倒计时文本
+      const estSec=estimateTimeTo(top,top.level+1);
+      const newEstText = '距突破 约 '+fmtDur(estSec);
+      if (el.barSubRight.textContent !== newEstText) {
+          el.barSubRight.textContent = newEstText;
+      }
   }else{
     el.topDiscipleName.textContent='—';el.topDiscipleRealm.textContent='';
     el.topDiscipleRoot.style.display='none';el.topDiscipleChosen.style.display='none';
@@ -2699,7 +2716,7 @@ function renderUI(){
         }
       }
     }
-    el.goalText.textContent=pctText+estText;
+    el.goalText.textContent=pctText+estText;if(el.topGoalText)el.topGoalText.textContent=pctText;
   }
   const canRecruit=s.discipleList.length<maxDisciples();
   el.btnRecruit.disabled=!canRecruit;
@@ -2801,7 +2818,7 @@ function renderDots(){
   const list=s.discipleList.slice().sort((a,b)=>b.level-a.level);
   const chief=topDisciple();
   // 签名：只要有变化才重绘
-  const sig=list.map(d=>d.id+'|'+d.level+'|'+Math.floor((d.loyalty||0))+'|'+(isInjured(d)?1:0)+'|'+(isOnExpedition(d)?1:0)+'|'+expProgress(d).toFixed(2)).join(',')+'#'+max+'#'+(chief?chief.id:'');
+  const sig=list.map(d=>d.id+'|'+d.level+'|'+Math.floor((d.loyalty||0))+'|'+(isInjured(d)?1:0)+'|'+(isOnExpedition(d)?1:0)+'|'+Math.floor(expProgress(d)*20)).join(',')+'#'+max+'#'+(chief?chief.id:'');
   if(sig===_lastDotsSig)return;
   _lastDotsSig=sig;
   let html='';
@@ -2872,7 +2889,7 @@ function renderPhaseGoal(){
   const top=topDisciple();if(!top){el.phaseGoal.style.display='none';return}
   for(const g of PHASE_GOALS){
     if(top.level<g.target){
-      el.phaseGoal.style.display='flex';el.phaseGoalText.innerHTML=g.text;
+      el.phaseGoal.style.display='flex';      if (el.phaseGoalText.innerHTML !== g.text) el.phaseGoalText.innerHTML = g.text;
       el.phaseGoalProgress.textContent=top.level+' / '+g.target+' 级';
       const est=estimateTimeTo(top,g.target);
       el.phaseGoalTime.textContent='· 约 '+fmtDur(est);
@@ -3077,8 +3094,11 @@ function applySaveData(rawData){
   s.sectName=data.sectName||'一毛宗';
   s.masterTitle=data.masterTitle||'';
   s.discipleList=(data.discipleList||[]).map(deserializeDisciple);
-  if(data.stones&&typeof data.stones.m==='number')s.stones=new Dec(data.stones.m,data.stones.e);
-  else s.stones=new Dec(100,0);
+  if (data.stones && isFinite(data.stones.m) && isFinite(data.stones.e)) {
+      s.stones = new Dec(data.stones.m, data.stones.e);
+  } else {
+      s.stones = new Dec(100, 0);
+  }
   s.cave=data.cave||0;s.eras=data.eras||0;
   s.totalReports=data.totalReports||0;s.reportsSinceEvent=data.reportsSinceEvent||0;
   s.memos=(data.memos||[]).map(deserializeMemo);
@@ -5261,23 +5281,42 @@ function renderQuickStats() {
   
   // 1. 更新毛的数字（并处理闪烁特效）
   try { 
+    // 防御性检查：如果 s.stones 不存在或格式不对，立刻重置为 0
+    if (!s.stones || typeof s.stones.toNum !== 'function') {
+      s.stones = new Dec(0, 0);
+    }
     const txt = fmtCoinVal(s.stones);
     el.stoneText.textContent = (txt === undefined || txt === null || txt === '') ? '0' : txt;
+    
+    // 新增：数字弹跳动画
+    if (!el.stoneText.classList.contains('bump')) {
+      el.stoneText.classList.add('bump');
+      setTimeout(() => el.stoneText.classList.remove('bump'), 200);
+    }
+
     if (s.stoneFlashFlag) {
       el.stoneText.classList.remove('flash');
       void el.stoneText.offsetWidth; // 触发重绘
       el.stoneText.classList.add('flash');
       s.stoneFlashFlag = false;
     }
-  } catch(e) {}
+  } catch(e) {
+    // 如果出错，把错误打印在控制台，并且强制显示为 0
+    console.error('毛数值渲染失败:', e);
+    if (el.stoneText) el.stoneText.textContent = '0';
+  }
   
   // 2. 更新修为进度条
   const top = topDisciple();
   if (top) {
     const need = expNeed(top.level);
     const ratio = top.exp.div(need).toNum();
-    el.sectExpFill.style.width = Math.max(0, Math.min(100, ratio * 100)) + '%';
-    el.sectExpText.textContent = fmtExp(top.exp) + ' / ' + fmtExp(need);
+      // 新增：缓存进度条更新，只有文本变化时才重绘
+      const newExpText = fmtExp(top.exp) + ' / ' + fmtExp(need);
+      if (el.sectExpText.textContent !== newExpText) {
+          el.sectExpText.textContent = newExpText;
+          el.sectExpFill.style.width = Math.max(0, Math.min(100, ratio * 100)) + '%';
+      }
   }
   
   // 3. 更新下次汇报倒计时
@@ -5324,12 +5363,67 @@ function gameLoop(){
   requestAnimationFrame(gameLoop);
 }
 function ensureAudioInit(){
-  const h=()=>{AudioSys.init();AudioSys.resume();setTimeout(()=>{if(AudioSys.ctx&&AudioSys.ctx.state==='running'){document.removeEventListener('click',h);document.removeEventListener('touchstart',h);if(AudioSys.enabled)AudioSys.audioReady();renderUI()}},150)};
-  document.addEventListener('click',h);document.addEventListener('touchstart',h);
+  const h = () => {
+    AudioSys.init();
+    AudioSys.resume();
+    
+    // 检查 BGM 并在用户交互后播放
+    const bgm = document.getElementById('bgm');
+    if (bgm && AudioSys.enabled) {
+      if (bgm.paused) {
+        bgm.volume = 0; // 初始音量设为 0
+        bgm.play().then(() => {
+          // 播放成功后，在 1.5 秒内平滑淡入到 0.2
+          let vol = 0;
+          const fadeIn = setInterval(() => {
+            if (vol < 0.2) {
+              vol += 0.01;
+              bgm.volume = Math.min(0.2, vol);
+            } else {
+              clearInterval(fadeIn);
+            }
+          }, 50);
+        }).catch(err => {
+          console.log('等待下一次点击以恢复音频:', err);
+        });
+      }
+    }
+    
+    setTimeout(() => {
+      if (AudioSys.ctx && AudioSys.ctx.state === 'running') {
+        if (AudioSys.enabled) AudioSys.audioReady();
+      }
+    }, 150);
+  };
+  
+  document.addEventListener('click', h);
+  document.addEventListener('touchstart', h);
 }
 
 /* ============ 事件绑定 ============ */
-el.startBtn.onclick=(e)=>{e.stopPropagation();AudioSys.init();AudioSys.resume();AudioSys.click();el.splash.classList.add('hide');setTimeout(()=>{el.splash.style.display='none';el.create.classList.remove('hide');el.nameInput.focus()},600)};
+el.startBtn.onclick=(e)=>{
+  e.stopPropagation();
+  AudioSys.init();
+  AudioSys.resume();
+  AudioSys.click();
+  
+  // 新增：提前预加载 BGM，让浏览器在用户输入名字时就开始缓冲
+  const bgm = document.getElementById('bgm');
+  if (bgm) {
+    bgm.load(); // 强制触发下载
+    console.log('📻 开始预加载 BGM');
+  }
+  
+  // 原有的代码：关闭启动页，显示起名界面
+  el.splash.classList.add('hide');
+  setTimeout(()=>{
+    el.splash.style.display='none';
+    el.create.classList.remove('hide');
+    el.nameInput.focus();
+  },600);
+};
+  
+  // ... 原有的代码继续el.splash.classList.add('hide');setTimeout(()=>{el.splash.style.display='none';el.create.classList.remove('hide');el.nameInput.focus()},600)};
 el.randomNameBtn.onclick=(e)=>{e.stopPropagation();AudioSys.click();el.nameInput.value=pick(['无名掌门','青云子','玄机子','太虚道人','问天真人','忘尘道人','拂尘子','守拙道人','静虚子','抱朴子']);updateCreate()};
 el.nameInput.addEventListener('input',updateCreate);
 function updateCreate(){el.createConfirm.disabled=!el.nameInput.value.trim()}
@@ -5362,6 +5456,20 @@ el.createConfirm.onclick=(e)=>{
     }
   },600);
 };
+// 新增：折叠底部UI
+let hudCollapsed = false;
+const toggleBtn = $('toggleHudBtn');
+if(toggleBtn) {
+  toggleBtn.onclick = (e) => {
+    e.stopPropagation();
+    AudioSys.click();
+    hudCollapsed = !hudCollapsed;
+    const rows = document.querySelectorAll('.tianxiang-row, .top-disciple-row, .dots-row, .bar-row, .bar-sub, .info-bottom, .last-break-row, .item-status-row, .phase-goal, .goal-bar');
+    rows.forEach(r => r.style.display = hudCollapsed ? 'none' : '');
+    toggleBtn.textContent = hudCollapsed ? '▲ 展开详情' : '▼ 收起详情';
+  };
+}
+
 el.btnReport.onclick=(e)=>{e.stopPropagation();AudioSys.click();if(s.discipleList.length===0){toast('还没有弟子，先收徒');return}openMemos()};
 el.btnRecruit.onclick=(e)=>{
   e.stopPropagation();
