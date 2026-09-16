@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>一毛修仙 · 图标生成器</title>
+<style>
+  body{margin:0;padding:40px;background:#172a24;color:#e8eef0;font-family:-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;gap:20px}
+  h1{color:#e6c473;letter-spacing:4px;font-family:"Songti SC",serif}
+  canvas{background:#1f3a32;border-radius:24px;box-shadow:0 0 40px rgba(230,196,115,.3)}
+  button{padding:14px 32px;border-radius:12px;border:1px solid #e6c473;background:rgba(230,196,115,.14);color:#e6c473;font-size:16px;font-weight:800;letter-spacing:4px;cursor:pointer;font-family:inherit}
+  button:hover{background:rgba(230,196,115,.25)}
+  .row{display:flex;gap:20px;flex-wrap:wrap;justify-content:center}
+  .label{font-size:14px;color:#8a9ca6;letter-spacing:2px}
+</style>
+</head>
+<body>
+
+<h1>一 毛 修 仙 · 图 标</h1>
+<div class="label">下面两个预览，点按钮下载对应尺寸</div>
+
+<div class="row">
+  <div style="text-align:center">
+    <canvas id="c192" width="192" height="192"></canvas>
+    <div class="label" style="margin-top:10px">192 × 192</div>
+    <button onclick="download(192)" style="margin-top:10px">下载 192</button>
+  </div>
+  <div style="text-align:center">
+    <canvas id="c512" width="512" height="512"></canvas>
+    <div class="label" style="margin-top:10px">512 × 512</div>
+    <button onclick="download(512)" style="margin-top:10px">下载 512</button>
+  </div>
+</div>
+
+<script>
+function draw(canvas, size){
+  const ctx = canvas.getContext('2d');
+  const S = size / 512;  // 缩放系数，让两种尺寸视觉一致
+
+  // 1. 背景：深绿径向渐变
+  const bg = ctx.createRadialGradient(256*S, 200*S, 0, 256*S, 256*S, 340*S);
+  bg.addColorStop(0, '#2b4c42');
+  bg.addColorStop(0.6, '#1f3a32');
+  bg.addColorStop(1, '#172a24');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, size, size);
+
+  // 2. 光晕
+  const glow = ctx.createRadialGradient(256*S, 230*S, 0, 256*S, 230*S, 220*S);
+  glow.addColorStop(0, 'rgba(230,196,115,.35)');
+  glow.addColorStop(0.5, 'rgba(230,196,115,.08)');
+  glow.addColorStop(1, 'rgba(230,196,115,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, size, size);
+
+  // 3. 弟子（简化的盘坐剪影）
+  ctx.save();
+  ctx.translate(256*S, 256*S);
+  ctx.scale(S, S);
+
+  // 身体
+  ctx.beginPath();
+  ctx.moveTo(-60, 130);
+  ctx.quadraticCurveTo(-75, 30, -55, -20);
+  ctx.quadraticCurveTo(-30, -55, 0, -60);
+  ctx.quadraticCurveTo(30, -55, 55, -20);
+  ctx.quadraticCurveTo(75, 30, 60, 130);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(41,70,60,.95)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(122,184,196,.8)';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // 头
+  ctx.beginPath();
+  ctx.ellipse(0, -90, 42, 48, 0, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(46,78,68,.95)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(122,184,196,.9)';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // 发髻
+  ctx.beginPath();
+  ctx.moveTo(-45, -105);
+  ctx.quadraticCurveTo(0, -160, 45, -105);
+  ctx.quadraticCurveTo(40, -120, 0, -128);
+  ctx.quadraticCurveTo(-40, -120, -45, -105);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(23,42,36,.98)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(230,196,115,.8)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // 发髻顶珠
+  ctx.beginPath();
+  ctx.arc(0, -155, 9, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(230,196,115,.95)';
+  ctx.fill();
+
+  // 眼（闭眼）
+  ctx.strokeStyle = 'rgba(232,238,240,.9)';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(-15, -92, 8, 0.15*Math.PI, 0.85*Math.PI);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(15, -92, 8, 0.15*Math.PI, 0.85*Math.PI);
+  ctx.stroke();
+
+  // 丹田金丹
+  ctx.beginPath();
+  ctx.arc(0, 30, 14, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(230,196,115,.9)';
+  ctx.shadowColor = 'rgba(230,196,115,.9)';
+  ctx.shadowBlur = 30;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.beginPath();
+  ctx.arc(0, 30, 26, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(230,196,115,.5)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // 底座光晕
+  ctx.beginPath();
+  ctx.ellipse(0, 140, 90, 12, 0, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(122,184,196,.25)';
+  ctx.fill();
+
+  ctx.restore();
+
+  // 4. 边角装饰（4 条金色弧线，营造"仙气"）
+  ctx.strokeStyle = 'rgba(230,196,115,.6)';
+  ctx.lineWidth = 3 * S;
+  const r = 400 * S;
+  const corners = [
+    [0, 0, 0.5*Math.PI],
+    [size, 0, 0.5*Math.PI],
+    [0, size, 0.5*Math.PI],
+    [size, size, 0.5*Math.PI]
+  ];
+  corners.forEach(([cx, cy, arc]) => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.stroke();
+  });
+}
+
+function download(size){
+  const canvas = document.getElementById('c' + size);
+  canvas.toBlob((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'icon-' + size + '.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, 'image/png');
+}
+
+// 初始化绘制
+draw(document.getElementById('c192'), 192);
+draw(document.getElementById('c512'), 512);
+</script>
+
+</body>
+</html>
