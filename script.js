@@ -26,7 +26,7 @@
  * ============================================================ */
 
 /* ============ 版本 ============ */
-const GAME_VERSION='v0.2';
+const GAME_VERSION='v0.3.4';
 const GAME_AUTHOR='Zhao | Struct. E.';
 const CURRENT_SAVE_VERSION=4;
 let DEC_LONG_FORMAT=false;
@@ -951,6 +951,7 @@ function createDefaultState(){
   };
 }
 let s=createDefaultState();
+let _saveTimer = null;
 function FS_VALUE(){return s.fontSize==='small'?0.9:(s.fontSize==='large'?1.15:1)}
 
 /* ============ 派生 ============ */
@@ -1488,12 +1489,24 @@ function checkAchievements(){
   processAchQueue();
 }
 function processAchQueue(){
-  if(achShowing||achQueue.length===0)return;
-  achShowing=true;
+  if(achQueue.length===0)return;
+  achShowing=false; 
   const a=achQueue.shift();
-  ModalQueue.push((next)=>{
-    showAchUnlock(a,()=>{next();achShowing=false;setTimeout(processAchQueue,200)});
-  });
+  
+  let rewardText='';
+  if(a.reward){
+    if(a.reward.stone){s.stones=s.stones.add(Dec.of(a.reward.stone));rewardText+='+'+fmtCoin(Dec.of(a.reward.stone))+' 毛 '}
+    if(a.reward.item){
+      const it=SHOP_ITEMS.find(x=>x.id===a.reward.item);
+      if(it){ rewardText+='获得「'+it.n+'」 '; setTimeout(()=>applyItemReward(a.reward.item),600); }
+    }
+    if(a.title&&!s.masterTitle){s.masterTitle=a.title;rewardText+='称号「'+a.title+'」'}
+  }
+  
+  showTipBanner(a.ic, '成就解锁：'+a.n+(rewardText?(' · '+rewardText):''));
+  if(a.challenge){AudioSys.achUnlock();flash('purple')}else{AudioSys.success();flash('gold')}
+  
+  setTimeout(processAchQueue, 800);
 }
 function showAchUnlock(a,onDone){
   const isC=!!a.challenge;
@@ -1761,40 +1774,36 @@ function tickDiscipleGains(dt,isOffline){
         s.lastBreak={name:d.name,realm:newR.name,time:now};
         addChronicle('break','⚡ <span class="hl">'+d.name+'</span> 突破至 <span class="up">'+newR.name+'</span>');
         changeLoyalty(d,CONFIG.loyaltyBreakSuccess,isOffline);
-// ---- 关系加成：关系人获得部分修为 ----
-if(d.relationships&&d.relationships.length>0){
-  for(const rel of d.relationships){
-    const partner=s.discipleList.find(x=>x.id===rel.targetId);
-    if(!partner)continue;
-    if(isOnExpedition(partner))continue;
-    let bonusPct=0;
-    if(rel.type==='lover')bonusPct=0.30;
-    else if(rel.type==='senior'||rel.type==='junior')bonusPct=0.10;
-    else if(rel.type==='fellow')bonusPct=0.08;
-    else if(rel.type==='rival')bonusPct=0.05;
-    if(bonusPct>0){
-      const bonus=expNeed(Math.max(0,d.level-1)).mul(bonusPct);
-      partner.exp=partner.exp.add(bonus);
-    }
-  }
-}
+        if(d.relationships&&d.relationships.length>0){
+          for(const rel of d.relationships){
+            const partner=s.discipleList.find(x=>x.id===rel.targetId);
+            if(!partner)continue;
+            if(isOnExpedition(partner))continue;
+            let bonusPct=0;
+            if(rel.type==='lover')bonusPct=0.30;
+            else if(rel.type==='senior'||rel.type==='junior')bonusPct=0.10;
+            else if(rel.type==='fellow')bonusPct=0.08;
+            else if(rel.type==='rival')bonusPct=0.05;
+            if(bonusPct>0){
+              const bonus=expNeed(Math.max(0,d.level-1)).mul(bonusPct);
+              partner.exp=partner.exp.add(bonus);
+            }
+          }
+        }
         if(!isOffline){
-  // 只有"大境界突破"或"第一重"才弹全屏
-  const isBigRealm=isBig||newR.sub===0;
-  // 第 1 次突破永远弹窗（保留仪式感）
-  const isFirstBreak=!s.ritesSeen.first_break;
-  if(isBigRealm||isFirstBreak){
-    const oldR=realmOf(d.level-1);
-    ModalQueue.push((next)=>{showBreakthroughModal(d,oldR,newR,next,usedForceBreak)});
-    tryShowRite('first_break');
-    if(isBig)tryShowRite('first_realm');
-    if(d.chosen)tryShowRite('first_chosen');
-  }else{
-    // 小突破只用飘字 + 音效，不打断玩家
-    showBreakFloat(d.name+' 突破 '+newR.short+' '+CN[newR.sub]+'重');
-    AudioSys.breakthrough();
-  }
-}
+          const isBigRealm=isBig||newR.sub===0;
+          const isFirstBreak=!s.ritesSeen.first_break;
+          if((isBigRealm||isFirstBreak) && ModalQueue.queue.length < 3){
+            const oldR=realmOf(d.level-1);
+            ModalQueue.push((next)=>{showBreakthroughModal(d,oldR,newR,next,usedForceBreak)});
+            tryShowRite('first_break');
+            if(isBig)tryShowRite('first_realm');
+            if(d.chosen)tryShowRite('first_chosen');
+          }else{
+            showBreakFloat(d.name+' 突破 '+newR.short+' '+CN[newR.sub]+'重');
+            AudioSys.breakthrough();
+          }
+        }
         if(isBig)checkTianjie(d,isBig);
       }else{
         d.exp=d.exp.sub(expNeed(d.level).mul(isBig?CONFIG.breakFailLossBig:CONFIG.breakFailLossSmall));
@@ -1807,6 +1816,7 @@ if(d.relationships&&d.relationships.length>0){
     }
   }
 }
+
 /* ============ 周目标统计 ============ */
 function ensureWeekly(){
   const wid=getWeekId();
@@ -2202,20 +2212,33 @@ function processOfflineTime(){
   if(elapsed<1)return null;
   const capped=Math.min(elapsed,MAX_OFFLINE_TICK);
   const before=s.lastSnapshot||captureSnapshot();
-  s.online=false;let remaining=capped;const CHUNK=CONFIG.offlineChunk;
+  s.online=false;let remaining=capped;
+  
+  // === 核心优化：动态分块，最多循环 30 次 ===
+  const MAX_LOOPS = 30;
+  const CHUNK = Math.max(120, capped / MAX_LOOPS); 
   const offlineMul=legacyOfflineMul();
   const offBreaks=[];const bcounts={};
   s.discipleList.forEach(d=>{bcounts[d.id]=d.totalBreaks});
-  while(remaining>0){const realDt=Math.min(CHUNK,remaining);const dt=realDt*offlineMul;tickDiscipleGains(dt,true);remaining-=realDt}
+  
+  // 记录循环次数，防止极端情况
+  let loopCount = 0;
+  while(remaining>0 && loopCount < MAX_LOOPS){
+    const realDt=Math.min(CHUNK,remaining);
+    const dt=realDt*offlineMul;
+    tickDiscipleGains(dt,true);
+    remaining-=realDt;
+    loopCount++;
+  }
+  
   s.discipleList.forEach(d=>{const delta=d.totalBreaks-(bcounts[d.id]||0);if(delta>0)offBreaks.push({name:d.name,count:delta,level:d.level})});
   s.lastTick=now;s.online=true;
   const interval=getReportInterval();
   const missed=Math.floor(capped*1000/interval);
   const canGen=Math.max(0,MAX_MEMOS-s.memos.length);
-  // 离线补生成最多 5 份（原来固定 1 份）
   const toGen=Math.min(missed,canGen,5);
   const recent=(s.chronicle||[]).filter(c=>c.time>=now-capped*1000).slice(0,6);
-  // 第 1 份是完整总结（带数据），其余是空壳日常
+  
   if(toGen>0){
     generateMemo(true);
     for(let i=1;i<toGen;i++){
@@ -2234,10 +2257,20 @@ function processOfflineTime(){
   }
   if(capped>=interval/1000)s.lastReport=now-(capped*1000%interval);
   s.lastSnapshot=captureSnapshot();
+  // 离线期间最多弹一次突破弹窗，其余转为飘字
+  if(s.unreadLog.breaks.length > 0){
+    const bigBreaks = s.unreadLog.breaks.filter(b=>b.isBig);
+    if(bigBreaks.length > 0){
+      const topB = bigBreaks[0];
+      const d = s.discipleList.find(x=>x.id===topB.discipleId);
+      if(d){ showBreakFloat(d.name+' 离线期间突破至 '+realmOf(d.level).name); }
+    }
+    // 清空突破队列，避免 ModalQueue 堆积
+    s.unreadLog.breaks = [];
+  }
   checkAchievements();
   return{duration:capped*1000,missed,generated:toGen,before,after:s.lastSnapshot,keyEvents:recent,offlineBreaks:offBreaks};
-}
-function pickOfflineFlavor(){
+}function pickOfflineFlavor(){
   if(!s.lastOfflineFlavor)s.lastOfflineFlavor='';
   const pool=OFFLINE_FLAVORS.filter(f=>f.text!==s.lastOfflineFlavor);
   const f=pick(pool.length>0?pool:OFFLINE_FLAVORS);
@@ -2625,9 +2658,6 @@ function renderUI(){
     if(el.topDiscipleInjured)el.topDiscipleInjured.style.display=isInjured(top)?'inline-block':'none';
     if(el.topDiscipleAging)el.topDiscipleAging.style.display=agingWarn(top)?'inline-block':'none';
     if(el.topDiscipleAway)el.topDiscipleAway.style.display=isOnExpedition(top)?'inline-block':'none';
-    const need=expNeed(top.level);const ratio=top.exp.div(need).toNum();
-    el.sectExpFill.style.width=Math.max(0,Math.min(100,ratio*100))+'%';
-    el.sectExpText.textContent=fmtExp(top.exp)+' / '+fmtExp(need);
     const subInRealm=top.level%9;
     el.barSubLeft.textContent=r.short+' '+CN[subInRealm]+'重';
     const estSec=estimateTimeTo(top,top.level+1);
@@ -2642,14 +2672,7 @@ function renderUI(){
     el.barSubLeft.textContent='—';el.barSubRight.textContent='';
   }
   renderDots();renderLastBreak();renderItemStatus();
-  try{
-    const txt=fmtCoinVal(s.stones);
-    el.stoneText.textContent=(txt===undefined||txt===null||txt==='')?'0':txt;
-  }catch(e){
-    el.stoneText.textContent='0';
-  }
-  if(s.stoneFlashFlag){el.stoneText.classList.remove('flash');void el.stoneText.offsetWidth;el.stoneText.classList.add('flash');s.stoneFlashFlag=false}
-  if(el.goalFill&&el.goalText){
+    if(el.goalFill&&el.goalText){
     const n=s.stones.toNum();const pct=Math.min(100,n/TARGET_MAO*100);
     el.goalFill.style.width=pct+'%';
     let pctText;
@@ -2677,10 +2700,6 @@ function renderUI(){
     }
     el.goalText.textContent=pctText+estText;
   }
-  const interval=getReportInterval();const elapsed=Date.now()-s.lastReport;
-  const nextTime=Math.max(0,(s.lastReport+interval-Date.now())/1000);
-  if(el.rtFill)el.rtFill.style.width=Math.max(0,Math.min(100,elapsed/interval*100))+'%';
-  if(el.rtText)el.rtText.textContent=fmtTime(nextTime);
   const canRecruit=s.discipleList.length<maxDisciples();
   el.btnRecruit.disabled=!canRecruit;
   if(!canRecruit){
@@ -3276,14 +3295,13 @@ function openImport(){
   $('backSaveI').onclick=(e)=>{e.stopPropagation();AudioSys.click();openSaveManage()};
 }
 el.importFileInput.addEventListener('change',(e)=>{const f=e.target.files&&e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{doImport(ev.target.result)};r.onerror=()=>toast('文件读取失败');r.readAsText(f)});
-function save(){
-  s.lastSave=Date.now();
-  try{
-    const data=JSON.stringify(serializeState());
-    localStorage.setItem(SAVE_KEY+'_backup',data);
-    localStorage.setItem(SAVE_KEY,data);
-  }catch(e){}
+function save() {
+  s.lastSave = Date.now();
+  if (_saveTimer) clearTimeout(_saveTimer);
+  // 延迟 1 秒执行保存，如果 1 秒内再次触发 save，则重新计时（防抖）
+  _saveTimer = setTimeout(() => { executeSave(); }, 1000);
 }
+
 function load(){
   try{
     const raw=localStorage.getItem(SAVE_KEY);
@@ -3309,6 +3327,22 @@ function load(){
   }
 }
 
+function executeSave() {
+  try {
+    const data = JSON.stringify(serializeState());
+    localStorage.setItem(SAVE_KEY + '_backup', data);
+    localStorage.setItem(SAVE_KEY, data);
+  } catch(e) {
+    console.error('存档写入失败', e);
+  } finally {
+    _saveTimer = null;
+  }
+}
+
+function flushSave() {
+  if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+  executeSave();
+}
 /* ============ 今日修行 ============ */
 function ensureDailyTasks(){
   const today=todayStr();
@@ -3811,8 +3845,44 @@ function handleMemoChoice(choice,outcome,memo,idx){
   addChronicle('event','事件「'+memo.event.title+'」 · 结果：'+({great:'大成功',good:'成功',ok:'平平',bad:'失利',awful:'大失败'})[outcome]);
   const o=choice.outcomes[outcome];
   checkDailyTasks();checkWeeklyTasks();
-  showMemoOutcome(o,outcome,memo,idx);
+    // 直接在当前弹窗内展示结果，不再弹新窗
+  showMemoOutcomeInline(o, outcome, memo);
 }
+
+function showMemoOutcomeInline(o, outcome, memo){
+  const labels={great:'大成功',good:'成功',ok:'平平',bad:'失利',awful:'大失败'};
+  const cls=outcome==='great'||outcome==='good'?'green':outcome==='bad'||outcome==='awful'?'red':'realm';
+  if(outcome==='great'||outcome==='good')AudioSys.success();
+  else if(outcome==='bad'||outcome==='awful')AudioSys.fail();
+  else AudioSys.click();
+  
+  let html='<div class="modal-title '+cls+'">'+labels[outcome]+'</div><div class="modal-sub">'+memo.event.title+'</div>';
+  html+='<div class="report-body" style="text-align:center;padding:12px 4px"><span class="rl">'+o.text+'</span></div>';
+  html+='<div class="report-gain">';
+  if(o.exp!==undefined)html+='<div class="rg-item"><div class="rg-val" style="color:'+(o.exp>=0?'var(--green)':'var(--red)')+'">'+(o.exp>=0?'+':'')+Dec.of(o.exp).format()+'</div><div class="rg-lbl">修为</div></div>';
+  if(o.stone!==undefined)html+='<div class="rg-item"><div class="rg-val" style="color:'+(o.stone>=0?'var(--green)':'var(--red)')+'">'+(o.stone>=0?'+':'')+fmtCoin(Dec.of(o.stone))+'</div><div class="rg-lbl">毛</div></div>';
+  if(o.loyalty!==undefined)html+='<div class="rg-item"><div class="rg-val" style="color:'+(o.loyalty>=0?'var(--green)':'var(--red)')+'">'+(o.loyalty>=0?'+':'')+o.loyalty+'</div><div class="rg-lbl">忠诚</div></div>';
+  html+='</div>';
+  
+  let pz='';
+  if(outcome==='great'||outcome==='good')pz=pick(tp('pz_good'));
+  else if(outcome==='bad'||outcome==='awful')pz=pick(tp('pz_bad'));
+  else pz=pick(tp('pz_ok'));
+  html+='<div class="pz-box"><div class="pz-lbl">📝 掌 门 批 注</div><div class="pz-text">「'+pz+'」</div></div>';
+  html+='<div class="tip-box" style="text-align:center;font-size:calc(12px * var(--fs-scale))" id="autoCloseTip">1.5 秒后自动返回奏章列表…</div>';
+  html+='<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
+  
+  showModal(html, {noClose:true});
+  
+  const i=s.memos.indexOf(memo);if(i>=0)s.memos.splice(i,1);
+  checkAchievements();renderUI();
+  
+  setTimeout(()=>{
+    hideModal();
+    openMemos();
+  }, 1500);
+}
+
 function showMemoOutcome(o,outcome,memo,idx){
   const labels={great:'大成功',good:'成功',ok:'平平',bad:'失利',awful:'大失败'};
   const cls=outcome==='great'||outcome==='good'?'green':outcome==='bad'||outcome==='awful'?'red':'realm';
@@ -5040,6 +5110,19 @@ function handleDotClick(discipleId){
   const d=s.discipleList.find(x=>x.id===discipleId);if(!d)return;
   const p=getP(d);const lines=CLICK_LINES[p.id]||CLICK_LINES.steady;
   AudioSys.tip();
+function handleCharClick(){
+  if(!s.created)return;
+  const top=topDisciple();
+  if(!top){showTipBanner('👤','还没有弟子');return}
+  const now=Date.now();
+  if(now-lastCharClick>8000)charClickCount=0;
+  lastCharClick=now;charClickCount++;
+  const p=getP(top);const lines=CLICK_LINES[p.id]||CLICK_LINES.steady;
+  const idx=Math.min(lines.length-1,Math.floor((charClickCount-1)/3));
+  AudioSys.tip();
+  vibrate(30); // <--- 新增这一行，点击主角震动30毫秒
+  showBubble(top.name,lines[Math.max(0,idx)]);
+}
   showBubble(d.name,pick(lines.slice(0,3)));
 }
 
@@ -5183,8 +5266,38 @@ function showEnding(e,next){
 }
 
 /* ============ 主循环 ============ */
-let lastSaveT=Date.now(),lastUIT=0,lastReportCheck=Date.now(),lastTickT=Date.now();
+let lastSaveT=Date.now(),lastUIT=0,lastReportCheck=Date.now(),lastTickT=Date.now(),lastQuickUIT=0;
 let lastSlowCheckT=0;
+function renderQuickStats() {
+  if (!s.created) return;
+  
+  // 1. 更新毛的数字（并处理闪烁特效）
+  try { 
+    const txt = fmtCoinVal(s.stones);
+    el.stoneText.textContent = (txt === undefined || txt === null || txt === '') ? '0' : txt;
+    if (s.stoneFlashFlag) {
+      el.stoneText.classList.remove('flash');
+      void el.stoneText.offsetWidth; // 触发重绘
+      el.stoneText.classList.add('flash');
+      s.stoneFlashFlag = false;
+    }
+  } catch(e) {}
+  
+  // 2. 更新修为进度条
+  const top = topDisciple();
+  if (top) {
+    const need = expNeed(top.level);
+    const ratio = top.exp.div(need).toNum();
+    el.sectExpFill.style.width = Math.max(0, Math.min(100, ratio * 100)) + '%';
+    el.sectExpText.textContent = fmtExp(top.exp) + ' / ' + fmtExp(need);
+  }
+  
+  // 3. 更新下次汇报倒计时
+  const interval = getReportInterval();
+  const nextTime = Math.max(0, (s.lastReport + interval - Date.now()) / 1000);
+  if (el.rtText) el.rtText.textContent = fmtTime(nextTime);
+  if (el.rtFill) el.rtFill.style.width = Math.max(0, Math.min(100, (Date.now() - s.lastReport) / interval * 100)) + '%';
+}
 function gameLoop(){
   const now=Date.now();
   if(now-lastTickT>=1000){
@@ -5193,7 +5306,8 @@ function gameLoop(){
     s.lastTick=now;lastTickT=now;
     tickAge();tickLoyalty();
   }
-  if(now-lastUIT>400){renderUI();lastUIT=now}
+  if(now-lastUIT>1000){renderUI();lastUIT=now}
+  if(now-lastQuickUIT>200){renderQuickStats();lastQuickUIT=now}
   if(now-lastSaveT>8000){save();lastSaveT=now}
   if(now-lastReportCheck>1000&&s.created&&s.discipleList.length>0){
     lastReportCheck=now;
@@ -5296,7 +5410,7 @@ el.menuSettings.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click(
 if(el.charArea)el.charArea.addEventListener('click',(e)=>{e.stopPropagation();handleCharClick()});
 if(el.moonOrderRow)el.moonOrderRow.addEventListener('click',(e)=>{e.stopPropagation();AudioSys.click();openMoonOrder()});
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){save();return}
+  if(document.hidden){flushSave();return}
   if(!s.created||s.discipleList.length===0)return;
   const info=processOfflineTime();
   processExpeditions();
@@ -5324,7 +5438,7 @@ document.addEventListener('keydown',(e)=>{
     openDevPanel();
   }
 });
-window.addEventListener('beforeunload',save);
+window.addEventListener('beforeunload',flushSave);
 
 /* ============ 本纪史册 / 成就 ============ */
 function openChronicle(){

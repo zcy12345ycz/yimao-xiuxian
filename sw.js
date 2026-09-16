@@ -1,43 +1,18 @@
-const CACHE_NAME = 'yimao-v1';
-const ASSETS = [
-  './',
-  './index.html',
-  './style.css',
-  './script.js',
-  './manifest.json'
-];
+// 一毛修仙 · Service Worker（极简版）
+// 策略：不缓存任何东西，只让浏览器识别这是 PWA
+// 好处：永远不会因为缓存坏响应而报错
 
-// 安装：缓存核心资源
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)).catch(() => {})
-  );
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
-// 激活：清理旧缓存
 self.addEventListener('activate', (e) => {
+  // 清掉旧版本留下的所有缓存
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+      Promise.all(keys.map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// 请求策略：网络优先，失败回退缓存
-self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    fetch(e.request).then(res => {
-      const clone = res.clone();
-      caches.open(CACHE_NAME).then(cache => {
-        // 只缓存同源资源
-        if (e.request.url.startsWith(self.location.origin)) {
-          cache.put(e.request, clone);
-        }
-      });
-      return res;
-    }).catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
-  );
-});
+// 什么都不拦截，所有请求正常走网络

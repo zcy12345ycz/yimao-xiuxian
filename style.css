@@ -111,6 +111,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 .halo{position:absolute;bottom:50%;left:50%;transform:translate(-50%,50%);width:240px;height:72px;border-radius:50%;background:radial-gradient(ellipse,var(--realm-50) 0%,transparent 70%);filter:blur(12px);pointer-events:none;animation:haloPulse 4s ease-in-out infinite}
 @keyframes haloPulse{0%,100%{opacity:.5;transform:translate(-50%,50%) scale(1)}50%{opacity:.95;transform:translate(-50%,50%) scale(1.12)}}
 .char-svg{position:relative;z-index:5;width:150px;height:184px;filter:drop-shadow(0 0 30px var(--realm)) drop-shadow(0 0 60px var(--realm-30));animation:charFloat 4s ease-in-out infinite;opacity:.92}
+.char-svg:active {
+  opacity: 0.6;
+  filter: drop-shadow(0 0 20px var(--gold));
+}
 @keyframes charFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 .char-svg.breakthrough{animation:charBreak 1.2s ease-out}
 @keyframes charBreak{0%{transform:translateY(0) scale(1)}20%{transform:translateY(-20px) scale(1.15)}50%{transform:translateY(-30px) scale(1.2)}100%{transform:translateY(0) scale(1)}}
@@ -233,6 +237,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 .btn .badge.full{background:var(--gold);color:#0d1a1f}
 .modal{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(15,30,25,.85);backdrop-filter:blur(12px);opacity:0;pointer-events:none;transition:opacity .3s}
 .modal.show{opacity:1;pointer-events:auto}
+.modal.show { overflow: hidden; }
+.modal-card { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .modal-card{width:100%;max-width:420px;max-height:86vh;overflow-y:auto;background:linear-gradient(180deg,rgba(31,58,50,.99) 0%,rgba(23,42,36,.99) 100%);border:1px solid rgba(230,196,115,.18);border-radius:22px;padding:26px 22px;padding-top:46px;box-shadow:0 24px 70px rgba(0,0,0,.5);transform:translateY(24px) scale(.95);transition:transform .38s cubic-bezier(.34,1.56,.64,1);position:relative}
 .modal.show .modal-card{transform:translateY(0) scale(1)}
 .modal-card::-webkit-scrollbar{width:4px}
@@ -586,6 +592,32 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 .yearbook-card .yb-range{font-size:calc(11.5px * var(--fs-scale));color:var(--dimmer);margin-bottom:8px}
 .yearbook-card .yb-summary{font-size:calc(12.5px * var(--fs-scale));color:var(--text);line-height:1.7}
 .yearbook-card .yb-summary .hl{color:var(--gold);font-weight:700}
+/* ============ 全局触控反馈 ============ */
+.btn, .gift-opt, .choice-btn, .disc-tab, .memo-tab, .icon-btn, .menu-item, .exp-location, .legacy-node, .yearbook-card, .building-card, .disciple-card, .daily-item, .realm-item, .gacha-slot, .bk-btn, .ach-unlock-btn, .tut-next {
+  transition: transform 0.1s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+.btn:active, .gift-opt:active, .choice-btn:active, .disc-tab:active, .memo-tab:active, .icon-btn:active, .menu-item:active, .exp-location:active, .legacy-node:active, .yearbook-card:active, .building-card:active, .disciple-card:active, .daily-item:active, .realm-item:active, .gacha-slot:active, .bk-btn:active, .ach-unlock-btn:active, .tut-next:active {
+  transform: scale(0.96);
+  opacity: 0.85;
+}
+.btn:active { background: rgba(230,196,115,0.2); }
+.choice-btn:active, .gift-opt:active { background: rgba(230,196,115,0.15); border-color: var(--gold); }
+
+/* ============ 安全区适配（解决iPhone刘海和底部横条遮挡） ============ */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.hud-bottom {
+  padding-bottom: calc(18px + env(safe-area-inset-bottom)) !important;
+}
+.hud-top {
+  padding-top: calc(18px + env(safe-area-inset-top)) !important;
+}
+.modal-card {
+  padding-bottom: calc(26px + env(safe-area-inset-bottom)) !important;
+  padding-top: calc(46px + env(safe-area-inset-top)) !important;
+}
 @media (max-height:720px){
   .splash-coin{font-size:56px;margin-bottom:14px}
   .splash-title{font-size:34px;letter-spacing:6px;margin-bottom:10px}
