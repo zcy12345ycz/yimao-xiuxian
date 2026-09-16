@@ -2242,6 +2242,7 @@ function processOfflineTime(){
   if(toGen>0){
     generateMemo(true);
     for(let i=1;i<toGen;i++){
+      if(s.memos.length>=MAX_MEMOS)break;
       s.memos.push({
         id:'m'+Date.now()+'_off'+i+Math.floor(Math.random()*1000),
         time:now-((toGen-i)*interval),
@@ -5104,28 +5105,15 @@ function handleCharClick(){
   const p=getP(top);const lines=CLICK_LINES[p.id]||CLICK_LINES.steady;
   const idx=Math.min(lines.length-1,Math.floor((charClickCount-1)/3));
   AudioSys.tip();
+  vibrate(30);
   showBubble(top.name,lines[Math.max(0,idx)]);
 }
 function handleDotClick(discipleId){
   const d=s.discipleList.find(x=>x.id===discipleId);if(!d)return;
   const p=getP(d);const lines=CLICK_LINES[p.id]||CLICK_LINES.steady;
   AudioSys.tip();
-function handleCharClick(){
-  if(!s.created)return;
-  const top=topDisciple();
-  if(!top){showTipBanner('👤','还没有弟子');return}
-  const now=Date.now();
-  if(now-lastCharClick>8000)charClickCount=0;
-  lastCharClick=now;charClickCount++;
-  const p=getP(top);const lines=CLICK_LINES[p.id]||CLICK_LINES.steady;
-  const idx=Math.min(lines.length-1,Math.floor((charClickCount-1)/3));
-  AudioSys.tip();
-  vibrate(30); // <--- 新增这一行，点击主角震动30毫秒
-  showBubble(top.name,lines[Math.max(0,idx)]);
-}
   showBubble(d.name,pick(lines.slice(0,3)));
 }
-
 /* ============ 天象系统 ============ */
 let tianxiangTimer=null;
 function checkTianxiang(){
