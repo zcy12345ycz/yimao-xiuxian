@@ -66,13 +66,15 @@ const el={
   stoneText:$('stoneText'),nextReportEl:$('nextReportEl'),rtFill:$('rtFill'),rtText:$('rtText'),
   goalFill:$('goalFill'),goalText:$('goalText'),
   btnReport:$('btnReport'),btnRecruit:$('btnRecruit'),btnLijian:$('btnLijian'),memoBadge:$('memoBadge'),
+  btnSect:$('btnSect'),btnMijing:$('btnMijing'),btnExpedition:$('btnExpedition'),
+  memoQuickBtn:$('memoQuickBtn'),memoQuickDot:$('memoQuickDot'),
+  recruitFab:$('recruitFab'),
   modal:$('modal'),modalCard:$('modalCard'),flash:$('flash'),toast:$('toast'),tipBanner:$('tipBanner'),
   tutMask:$('tutMask'),tutTip:$('tutTip'),
   menuBtn:$('menuBtn'),menuBtnDot:$('menuBtnDot'),menuPop:$('menuPop'),
   signInQuickBtn:$('signInQuickBtn'),signInQuickDot:$('signInQuickDot'),
   soundQuickBtn:$('soundQuickBtn'),donateQuickBtn:$('donateQuickBtn'),helpQuickBtn:$('helpQuickBtn'),
   menuSave:$('menuSave'),menuSettings:$('menuSettings'),
-  menuHelp:$('menuHelp'),menuDonate:$('menuDonate'),
   importFileInput:$('importFileInput'),
   phaseGoal:$('phaseGoal'),phaseGoalText:$('phaseGoalText'),phaseGoalProgress:$('phaseGoalProgress'),phaseGoalTime:$('phaseGoalTime'),
   breakthrough:$('breakthrough'),bkCard:$('bkCard'),bkRays:$('bkRays'),
@@ -150,10 +152,9 @@ function createDefaultState(){
     allExpMul:0,lastSnapshot:null,
     firstEraTime:0,createdAt:Date.now(),
     unreadLog:{exp:new Dec(0,0),stone:new Dec(0,0),breaks:[],fails:[]},
-    autoBank:{exp:new Dec(0,0),stone:new Dec(0,0),breaks:[],count:0},
     recentEvents:[],
-    numFormat:'short',audioEnabled:true,musicEnabled:true,masterEnergy:5,lastEnergyRecover:Date.now(),dailyPendingRewards:{exp:new Dec(0,0),stone:new Dec(0,0)},vibrationEnabled:true,fontSize:'normal',dialect:'sc',
-    viceEnabled:false,lastBreak:null,tipsSeen:{},openingTutorialDone:false,stoneFlashFlag:false,
+        numFormat:'short',audioEnabled:true,musicEnabled:true,vibrationEnabled:true,fontSize:'normal',dialect:'sc',
+    lastBreak:null,tipsSeen:{},openingTutorialDone:false,stoneFlashFlag:false,
     mijingCooldowns:{low:0,mid:0,high:0,top:0},clickEggCount:0,
     nextTalent:false,relics:[],lastCheckAge:0,
     tianxiangId:'normal',tianxiangUntil:0,lastTianxiangWarn:0,
@@ -166,7 +167,8 @@ function createDefaultState(){
     moonOrder:'cultivate',
     moonOrderChangedAt:0,
     lastRecruitAt:0,
-    signIn:{lastDate:'',cycleDay:0,totalDays:0,dailyQuiz:{date:'',questions:[],answers:[],answeredAt:0,rewardGranted:false}},
+    signIn:{lastDate:'',cycleDay:0,totalDays:0},
+    gufengQuiz:{lastRefresh:0,pending:[]},
     quizStats:{total:0,correct:0,days:0,streak:0,bestStreak:0,history:[]},
     dailyBuff:{until:0},
     milestones:{},
@@ -426,13 +428,12 @@ function serializeState(){
     lastSnapshot:s.lastSnapshot,
     firstEraTime:s.firstEraTime,createdAt:s.createdAt,
     recentEvents:s.recentEvents||[],
-    numFormat:s.numFormat||'short',audioEnabled:AudioSys.enabled,musicEnabled:s.musicEnabled!==false,masterEnergy:s.masterEnergy,masterEnergyRecover:s.lastEnergyRecover,dailyPendingRewards:{exp:{m:(s.dailyPendingRewards&&s.dailyPendingRewards.exp.m)||0,e:(s.dailyPendingRewards&&s.dailyPendingRewards.exp.e)||0},stone:{m:(s.dailyPendingRewards&&s.dailyPendingRewards.stone.m)||0,e:(s.dailyPendingRewards&&s.dailyPendingRewards.stone.e)||0}},
+        numFormat:s.numFormat||'short',audioEnabled:AudioSys.enabled,musicEnabled:s.musicEnabled!==false,
     vibrationEnabled:s.vibrationEnabled!==false,fontSize:s.fontSize||'normal',dialect:s.dialect||'sc',
-    viceEnabled:!!s.viceEnabled,lastBreak:s.lastBreak||null,
+    lastBreak:s.lastBreak||null,
     tipsSeen:s.tipsSeen||{},openingTutorialDone:!!s.openingTutorialDone,
     mijingCooldowns:s.mijingCooldowns||{low:0,mid:0,high:0,top:0},
-    autoBank:{exp:{m:s.autoBank.exp.m,e:s.autoBank.exp.e},stone:{m:s.autoBank.stone.m,e:s.autoBank.stone.e},breaks:s.autoBank.breaks,count:s.autoBank.count},
-    unreadLog:{exp:{m:s.unreadLog.exp.m,e:s.unreadLog.exp.e},stone:{m:s.unreadLog.stone.m,e:s.unreadLog.stone.e},breaks:s.unreadLog.breaks,fails:s.unreadLog.fails},
+        unreadLog:{exp:{m:s.unreadLog.exp.m,e:s.unreadLog.exp.e},stone:{m:s.unreadLog.stone.m,e:s.unreadLog.stone.e},breaks:s.unreadLog.breaks,fails:s.unreadLog.fails},
     clickEggCount:s.clickEggCount||0,nextTalent:!!s.nextTalent,
     relics:s.relics||[],lastCheckAge:s.lastCheckAge||0,
     tianxiangId:s.tianxiangId||'normal',tianxiangUntil:s.tianxiangUntil||0,
@@ -440,13 +441,12 @@ function serializeState(){
     ancestralDisciple:s.ancestralDisciple||null,
     endingDismissed:s.endingDismissed||[],
     lastLoyaltyTick:s.lastLoyaltyTick||0,
-    viceCutTotal:{m:(s.viceCutTotal||new Dec(0,0)).m,e:(s.viceCutTotal||new Dec(0,0)).e},
-    viceUpkeepPool:{m:(s.viceUpkeepPool||new Dec(0,0)).m,e:(s.viceUpkeepPool||new Dec(0,0)).e},
     showTianxia:s.showTianxia!==false,
     moonOrder:s.moonOrder||'cultivate',
     moonOrderChangedAt:s.moonOrderChangedAt||0,
     lastRecruitAt:s.lastRecruitAt||0,
-    signIn:s.signIn||{lastDate:'',cycleDay:0,totalDays:0,dailyQuiz:{date:'',questions:[],answers:[],answeredAt:0,rewardGranted:false}},
+    signIn:s.signIn||{lastDate:'',cycleDay:0,totalDays:0},
+    gufengQuiz:s.gufengQuiz||{lastRefresh:0,pending:[]},
     quizStats:s.quizStats||{total:0,correct:0,days:0,streak:0,bestStreak:0,history:[]},
     dailyBuff:s.dailyBuff||{until:0},
     milestones:s.milestones||{},
@@ -584,7 +584,7 @@ function applySaveData(rawData){
   }
   s.cave=data.cave||0;s.eras=data.eras||0;
   s.totalReports=data.totalReports||0;s.reportsSinceEvent=data.reportsSinceEvent||0;
-  s.memos=(data.memos||[]).map(deserializeMemo);
+s.memos=(data.memos||[]).map(deserializeMemo).filter(m=>m.isQuiz||(m.event&&(m.event.isGufeng||m.event.stateStory)));
   s.lastSave=data.lastSave||Date.now();s.lastReport=data.lastReport||Date.now();s.lastTick=data.lastTick||Date.now();
   s.tutorialDone=!!data.tutorialDone;s.created=!!data.created;
   s.buildings=Object.assign({scripture:0,alchemy:0,arena:0,array:0},data.buildings||{});
@@ -600,15 +600,8 @@ function applySaveData(rawData){
   s.numFormat=data.numFormat||'short';DEC_LONG_FORMAT=(s.numFormat==='long');
   if(typeof data.audioEnabled==='boolean')AudioSys.enabled=data.audioEnabled;
   if(typeof data.musicEnabled==='boolean')s.musicEnabled=data.musicEnabled;else s.musicEnabled=true;
-  s.masterEnergy = typeof data.masterEnergy === 'number' ? data.masterEnergy : 5;
-  s.lastEnergyRecover = data.masterEnergyRecover || Date.now();
-  if(data.dailyPendingRewards && typeof data.dailyPendingRewards.exp.m === 'number') {
-    s.dailyPendingRewards = { exp: new Dec(data.dailyPendingRewards.exp.m, data.dailyPendingRewards.exp.e), stone: new Dec(data.dailyPendingRewards.stone.m, data.dailyPendingRewards.stone.e) };
-  } else {
-    s.dailyPendingRewards = { exp: new Dec(0,0), stone: new Dec(0,0) };
-  }
   s.vibrationEnabled=data.vibrationEnabled!==false;s.fontSize=data.fontSize||'normal';s.dialect=data.dialect||'sc';
-  s.viceEnabled=!!data.viceEnabled;s.lastBreak=data.lastBreak||null;
+  s.lastBreak=data.lastBreak||null;
   s.tipsSeen=Object.assign({},data.tipsSeen||{});
   s.openingTutorialDone=!!data.openingTutorialDone;
   s.mijingCooldowns=Object.assign({low:0,mid:0,high:0,top:0},data.mijingCooldowns||{});
@@ -621,24 +614,14 @@ function applySaveData(rawData){
   s.ancestralDisciple=data.ancestralDisciple||null;
   s.endingDismissed=Array.isArray(data.endingDismissed)?data.endingDismissed:[];
   s.lastLoyaltyTick=data.lastLoyaltyTick||Date.now();
-  s.viceCutTotal=data.viceCutTotal?new Dec(data.viceCutTotal.m,data.viceCutTotal.e):new Dec(0,0);
-  s.viceUpkeepPool=data.viceUpkeepPool?new Dec(data.viceUpkeepPool.m,data.viceUpkeepPool.e):new Dec(0,0);
   s.showTianxia=data.showTianxia!==false;
   s.moonOrder=data.moonOrder||'cultivate';
   s.moonOrderChangedAt=data.moonOrderChangedAt||0;
   s.lastRecruitAt=data.lastRecruitAt||0;
-  s.signIn=data.signIn||{lastDate:'',cycleDay:0,totalDays:0};
-  s.quizStats=Object.assign({total:0,correct:0,days:0,streak:0,bestStreak:0,history:[]},data.quizStats||{});
-  if(!Array.isArray(s.quizStats.history))s.quizStats.history=[];
-  if(!s.signIn.dailyQuiz||typeof s.signIn.dailyQuiz!=='object'){
-    s.signIn.dailyQuiz={date:'',questions:[],answers:[],answeredAt:0,rewardGranted:false};
-  }
-  // 兼容旧存档：确保 dailyQuiz 各字段存在
-  if(!s.signIn.dailyQuiz.questions)s.signIn.dailyQuiz.questions=[];
-  if(!s.signIn.dailyQuiz.answers)s.signIn.dailyQuiz.answers=[];
-  if(typeof s.signIn.dailyQuiz.answeredAt!=='number')s.signIn.dailyQuiz.answeredAt=0;
-  if(typeof s.signIn.dailyQuiz.rewardGranted!=='boolean')s.signIn.dailyQuiz.rewardGranted=false;
-  if(typeof s.signIn.dailyQuiz.date!=='string')s.signIn.dailyQuiz.date='';
+    s.signIn=data.signIn||{lastDate:'',cycleDay:0,totalDays:0};
+  s.gufengQuiz=data.gufengQuiz||{lastRefresh:0,pending:[]};
+  if(!Array.isArray(s.gufengQuiz.pending))s.gufengQuiz.pending=[];
+  if(typeof s.gufengQuiz.lastRefresh!=='number')s.gufengQuiz.lastRefresh=0;
   s.dailyBuff=data.dailyBuff||{until:0};
   s.milestones=data.milestones||{};
   s.eventChain=data.eventChain||{};
@@ -651,8 +634,7 @@ function applySaveData(rawData){
   s.currentYear=data.currentYear||{startAt:Date.now(),stats:{breaks:0,deaths:0,recruits:0,greatEvents:0,awfulEvents:0,expeditions:0},events:[]};
   s.worldEvents=Array.isArray(data.worldEvents)?data.worldEvents:[];
   s.lastDefectCheck=data.lastDefectCheck||Date.now();
-  if(data.autoBank)s.autoBank={exp:new Dec((data.autoBank.exp&&data.autoBank.exp.m)||0,(data.autoBank.exp&&data.autoBank.exp.e)||0),stone:new Dec((data.autoBank.stone&&data.autoBank.stone.m)||0,(data.autoBank.stone&&data.autoBank.stone.e)||0),breaks:data.autoBank.breaks||[],count:data.autoBank.count||0};
-  if(data.unreadLog)s.unreadLog={exp:new Dec((data.unreadLog.exp&&data.unreadLog.exp.m)||0,(data.unreadLog.exp&&data.unreadLog.exp.e)||0),stone:new Dec((data.unreadLog.stone&&data.unreadLog.stone.m)||0,(data.unreadLog.stone&&data.unreadLog.stone.e)||0),breaks:data.unreadLog.breaks||[],fails:data.unreadLog.fails||[]};
+    if(data.unreadLog)s.unreadLog={exp:new Dec((data.unreadLog.exp&&data.unreadLog.exp.m)||0,(data.unreadLog.exp&&data.unreadLog.exp.e)||0),stone:new Dec((data.unreadLog.stone&&data.unreadLog.stone.m)||0,(data.unreadLog.stone&&data.unreadLog.stone.e)||0),breaks:data.unreadLog.breaks||[],fails:data.unreadLog.fails||[]};
   if(s.discipleList.length>0)s.flags.firstRecruitDone=true;
   applyFontSize();renderSplashStory();lastTopSi=-1;save();
 }
@@ -862,27 +844,6 @@ function executeSave() {
   }
 }
 
-function tickEnergy(){
-  if(!s.created) return;
-  const now = Date.now();
-  if(!s.lastEnergyRecover) s.lastEnergyRecover = now;
-  const elapsed = now - s.lastEnergyRecover;
-  const interval = CONFIG.energyRecoverInterval;
-  const maxEnergy = CONFIG.maxEnergy;
-  if(elapsed >= interval && s.masterEnergy < maxEnergy){
-    const recovered = Math.floor(elapsed / interval);
-    s.masterEnergy = Math.min(maxEnergy, s.masterEnergy + recovered);
-    s.lastEnergyRecover += recovered * interval;
-  }
-}
-function consumeEnergy(amount){
-  amount = amount || 1;
-  if(s.masterEnergy < amount) return false;
-  s.masterEnergy -= amount;
-  save();
-  renderUI();
-  return true;
-}
 
 function flushSave() {
   if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }

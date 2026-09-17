@@ -214,10 +214,8 @@ function tickDiscipleGains(dt,isOffline){
     let sg=discipleStoneRate(d).mul(dt);
     const upkeep=Math.max(0,Math.min(CONFIG.discipleUpkeepMax,d.upkeep||CONFIG.discipleUpkeepDefault));
     const myShare=sg.mul(1-upkeep);
-    const upShare=sg.sub(myShare);
     s.stones=s.stones.add(myShare);
     s.unreadLog.stone=s.unreadLog.stone.add(myShare);
-    s.viceUpkeepPool=(s.viceUpkeepPool||new Dec(0,0)).add(upShare);
     let bg=0;
     while(d.exp.gte(expNeed(d.level))&&bg++<100){
       const isBig=(d.level%9)===8;
@@ -588,55 +586,134 @@ function checkYearbook(){
   save();
 }
 
+/* ============ 凡间见闻 · 古风问答 ============ */
+function pickActiveDisciple(){
+  const actives=s.discipleList.filter(d=>!isOnExpedition(d)&&!isInMijing(d));
+  if(actives.length===0)return null;
+  // 悟性加权：悟性越高，越容易被抽中当主角
+  // 保底权重 20，避免悟性低的弟子完全没机会
+  const total=actives.reduce((a,d)=>a+Math.max(20,d.comprehension||50),0);
+  let r=Math.random()*total;
+  for(const d of actives){
+    r-=Math.max(20,d.comprehension||50);
+    if(r<=0)return d;
+  }
+  return actives[0];
+}
+function countPendingGufeng(){
+  return s.memos.filter(m=>m.event&&m.event.isGufeng).length;
+}
+function pickGufengQuestion(){
+  const pendingIds=s.memos.filter(m=>m.event&&m.event.isGufeng).map(m=>m.event.id);
+  const pool=GUFENG_QUIZ.filter(q=>!pendingIds.includes(q.id));
+  const src=pool.length>0?pool:GUFENG_QUIZ;
+  const q=pick(src);
+  const opts=shuffle(q.options.slice());
+  return{
+    id:q.id,
+    title:q.title,
+    icon:q.icon,
+    scene:q.scene,
+    options:opts,
+    explain:q.explain
+  };
+}
+function buildGufengMemo(){
+  const actor=pickActiveDisciple();
+  if(!actor)return null;
+  const q=pickGufengQuestion();
+  if(!q)return null;
+  const sceneText=q.scene.replace(/\{name\}/g,actor.name);
+  return{
+    id:'m'+Date.now()+Math.floor(Math.random()*1000),
+    time:Date.now(),
+    interval:GUFENG_REFRESH_INTERVAL,
+    read:false,
+    isOffline:false,
+    isAutoBank:false,
+    totalExp:new Dec(0,0),
+    totalStone:new Dec(0,0),
+    breaks:[],
+    fails:[],
+    voice:'',
+    greeting:'',
+    daily:'',
+    chatter:null,
+    bigBreaks:[],
+    event:{
+      id:q.id,
+      title:q.title,
+      icon:q.icon,
+      scene:sceneText,
+      options:q.options,
+      explain:q.explain,
+      discipleId:actor.id,
+      discipleName:actor.name,
+      isGufeng:true
+    }
+  };
+}
+function buildMemoFromEvent(ev){
+  return{
+    id:'m'+Date.now()+Math.floor(Math.random()*1000),
+    time:Date.now(),
+    interval:getReportInterval(),
+    read:false,
+    isOffline:false,
+    isAutoBank:false,
+    totalExp:new Dec(0,0),
+    totalStone:new Dec(0,0),
+    breaks:[],
+    fails:[],
+    voice:'',
+    greeting:'',
+    daily:'',
+    chatter:null,
+    bigBreaks:[],
+    event:ev
+  };
+}
+function refreshGufengQuiz(){
+  if(!s.created||s.discipleList.length===0)return null;
+  const now=Date.now();
+  if(!s.gufengQuiz)s.gufengQuiz={lastRefresh:0,pending:[]};
+  if(now-s.gufengQuiz.lastRefresh<GUFENG_REFRESH_INTERVAL)return null;
+  if(countPendingGufeng()>=GUFENG_MAX_PENDING){
+    s.gufengQuiz.lastRefresh=now;
+    return null;
+  }
+  s.gufengQuiz.lastRefresh=now;
+  // 优先状态剧情：主角有状态时，50% 概率出状态剧情
+  const actor=pickActiveDisciple();
+  if(actor){
+    const sts=getActiveStates(actor);
+    if(sts.length>0&&Math.random()<0.5){
+      const matching=STATE_STORY_TEMPLATES.filter(t=>sts.some(st=>st.id===t.stateType));
+      if(matching.length>0){
+        const st=weightedPick(matching,'weight');
+        const ev=buildDynamicEvent(st,actor);
+        if(ev){
+          ev.discipleId=actor.id;
+          ev.discipleName=actor.name;
+          ev.stateStory=true;
+          return buildMemoFromEvent(ev);
+        }
+      }
+    }
+  }
+  // 否则出古风问答
+  return buildGufengMemo();
+}
+
 /* ============ 奏章 ============ */
 function generateMemo(isOffline){
   if(s.memos.length>=MAX_MEMOS)return null;
-
-  // 【旧版遗留】quiz 奏章生成已停用，改由每日签到答题系统接管。
-  // 存档里已存在的 quiz memo 仍可通过奏章列表正常处理。
-  s.totalReports++;  const interval=getReportInterval();
-  const ul=s.unreadLog;
-  const memo={id:'m'+Date.now()+Math.floor(Math.random()*1000),time:Date.now(),interval,read:false,event:null,isOffline:!!isOffline,isAutoBank:false,
-    totalExp:ul.exp.clone(),totalStone:ul.stone.clone(),breaks:ul.breaks.slice(),fails:ul.fails.slice(),
-    voice:'',greeting:'',daily:'',chatter:null,bigBreaks:[]};
-  s.unreadLog={exp:new Dec(0,0),stone:new Dec(0,0),breaks:[],fails:[]};
-  memo.breaks.forEach(b=>{if(b.isBig)memo.bigBreaks.push({name:b.name,level:b.level,discipleId:b.discipleId})});
-  const top=topDisciple();
-  if(top){const p=getP(top);memo.greeting=pick(GREETINGS[p.id]);memo.voice=pick(getVoice(top))}
-  memo.daily=getDailyDesc();
-  if(!isOffline)memo.chatter=pickChatter();
-  memo.event = s.masterEnergy > 0 ? pickEvent() : null;
-  memo.eventSkipped = s.masterEnergy <= 0;
-
-  // 新增：如果没有事件（日常/闲聊/小突破），合并到宗门日结，不生成独立奏章
-  if (!memo.event && !memo.isQuiz) {
-    if (!s.dailyPendingRewards) s.dailyPendingRewards = { exp: new Dec(0,0), stone: new Dec(0,0) };
-    s.dailyPendingRewards.exp = s.dailyPendingRewards.exp.add(memo.totalExp);
-    s.dailyPendingRewards.stone = s.dailyPendingRewards.stone.add(memo.totalStone);
-    return null; // 返回 null，不推送到 s.memos
-  }
-  if(s.viceEnabled&&!memo.event&&!isOffline){
-    const cut=memo.totalStone.mul(VICE_CUT);
-    const kept=memo.totalStone.sub(cut);
-    s.autoBank.exp=s.autoBank.exp.add(memo.totalExp);
-    s.autoBank.stone=s.autoBank.stone.add(kept);
-    s.autoBank.breaks.push(...memo.breaks);s.autoBank.count++;
-    s.viceCutTotal=(s.viceCutTotal||new Dec(0,0)).add(cut);
-    memo.totalStone=kept;
-    return memo;
-  }
-  s.memos.push(memo);
-  return memo;
-}
-function flushAutoBank(){
-  if(!s.autoBank||s.autoBank.count===0)return;
-  const memo={id:'ab_'+Date.now(),time:Date.now(),interval:60*1000,read:false,event:null,isOffline:false,isAutoBank:true,
-    totalExp:s.autoBank.exp.clone(),totalStone:s.autoBank.stone.clone(),breaks:s.autoBank.breaks.slice(),fails:[],
-    voice:'',greeting:'',daily:'',chatter:null,bigBreaks:[],autoCount:s.autoBank.count};
-  s.memos.unshift(memo);
-  s.autoBank={exp:new Dec(0,0),stone:new Dec(0,0),breaks:[],count:0};
-}
-function applyChoiceOutcome(choice,outcome,actor){
+  s.totalReports++;
+  // 检查是否需要刷新古风问答 / 状态剧情
+  const newMemo=refreshGufengQuiz();
+  if(newMemo)s.memos.push(newMemo);
+  return newMemo;
+}function applyChoiceOutcome(choice,outcome,actor){
   const o=choice.outcomes[outcome];
   if(choice.cost&&choice.cost>0){const c=Dec.of(choice.cost);if(s.stones.gte(c))s.stones=s.stones.sub(c)}
   if(o){
@@ -694,23 +771,38 @@ function applyChoiceOutcome(choice,outcome,actor){
 }
 
 /* ============ 离线 ============ */
+function offlineEffectiveSeconds(elapsed){
+  // 分段衰减：0-8h 100%、8-12h 80%、12-18h 60%、18-24h 40%、超过 24h 不再收益
+  const h=elapsed/3600;
+  let eff=0;
+  eff+=Math.min(h,8)*1.0;
+  if(h>8) eff+=Math.min(h-8,4)*0.8;
+  if(h>12)eff+=Math.min(h-12,6)*0.6;
+  if(h>18)eff+=Math.min(h-18,6)*0.4;
+  return eff*3600;
+}
 function captureSnapshot(){const top=topDisciple();return{level:top?top.level:0,realmName:top?realmOf(top.level).name:'—',stones:s.stones.clone(),discipleCount:s.discipleList.length,totalBreaks:s.discipleList.reduce((a,d)=>a+d.totalBreaks,0),time:Date.now()}}
 function processOfflineTime(){
   if(!s.created||s.discipleList.length===0)return null;
   const now=Date.now();const elapsed=Math.max(0,(now-s.lastTick)/1000);
   if(elapsed<1)return null;
   const capped=Math.min(elapsed,MAX_OFFLINE_TICK);
+  const effectiveSeconds=offlineEffectiveSeconds(elapsed);
   const before=s.lastSnapshot||captureSnapshot();
-  s.online=false;let remaining=capped;
-  
+  // 记录跑 tick 前的状态，用来算实际收益和损失
+  const expBefore={};
+  s.discipleList.forEach(d=>{expBefore[d.id]=d.exp.clone()});
+  const stonesBefore=s.stones.clone();
+
+  s.online=false;let remaining=effectiveSeconds;
+
   // === 核心优化：动态分块，最多循环 30 次 ===
   const MAX_LOOPS = 30;
-  const CHUNK = Math.max(120, capped / MAX_LOOPS); 
+  const CHUNK = Math.max(120, effectiveSeconds / MAX_LOOPS);
   const offlineMul=legacyOfflineMul();
   const offBreaks=[];const bcounts={};
   s.discipleList.forEach(d=>{bcounts[d.id]=d.totalBreaks});
-  
-  // 记录循环次数，防止极端情况
+
   let loopCount = 0;
   while(remaining>0 && loopCount < MAX_LOOPS){
     const realDt=Math.min(CHUNK,remaining);
@@ -719,31 +811,35 @@ function processOfflineTime(){
     remaining-=realDt;
     loopCount++;
   }
-  
+
   s.discipleList.forEach(d=>{const delta=d.totalBreaks-(bcounts[d.id]||0);if(delta>0)offBreaks.push({name:d.name,count:delta,level:d.level})});
   s.lastTick=now;s.online=true;
+
+  // 算实际收益
+  const stoneGain=s.stones.sub(stonesBefore);
+  let expGain=new Dec(0,0);
+  s.discipleList.forEach(d=>{
+    const b0=expBefore[d.id]||new Dec(0,0);
+    const g=d.exp.sub(b0);
+    if(g.gt(0))expGain=expGain.add(g);
+  });
+  // 算损失（按比例反推：全速收益 - 实际收益）
+  let lostStone=new Dec(0,0);
+  let lostExp=new Dec(0,0);
+  if(effectiveSeconds>0 && capped>effectiveSeconds){
+    const lossRatio=capped/effectiveSeconds-1;
+    lostStone=stoneGain.mul(lossRatio);
+    lostExp=expGain.mul(lossRatio);
+  }
+
   const interval=getReportInterval();
   const missed=Math.floor(capped*1000/interval);
   const canGen=Math.max(0,MAX_MEMOS-s.memos.length);
   const toGen=Math.min(missed,canGen,5);
   const recent=(s.chronicle||[]).filter(c=>c.time>=now-capped*1000).slice(0,6);
-  
+
   if(toGen>0){
     generateMemo(true);
-    for(let i=1;i<toGen;i++){
-      if(s.memos.length>=MAX_MEMOS)break;
-      s.memos.push({
-        id:'m'+Date.now()+'_off'+i+Math.floor(Math.random()*1000),
-        time:now-((toGen-i)*interval),
-        interval,
-        read:false,event:null,isOffline:true,isAutoBank:false,
-        totalExp:new Dec(0,0),totalStone:new Dec(0,0),
-        breaks:[],fails:[],voice:'',
-        greeting:'掌门闭关期间，弟子照常修行。',
-        daily:pick(TX.daily.std),
-        chatter:null,bigBreaks:[]
-      });
-    }
   }
   if(capped>=interval/1000)s.lastReport=now-(capped*1000%interval);
   s.lastSnapshot=captureSnapshot();
@@ -759,8 +855,17 @@ function processOfflineTime(){
     s.unreadLog.breaks = [];
   }
   checkAchievements();
-  return{duration:capped*1000,missed,generated:toGen,before,after:s.lastSnapshot,keyEvents:recent,offlineBreaks:offBreaks};
-}function pickOfflineFlavor(){
+  return{
+    duration:capped*1000,
+    elapsedSeconds:elapsed,
+    effectiveSeconds:effectiveSeconds,
+    lostStone:lostStone,
+    lostExp:lostExp,
+    missed,generated:toGen,before,after:s.lastSnapshot,keyEvents:recent,offlineBreaks:offBreaks
+  };
+}
+
+function pickOfflineFlavor(){
   if(!s.lastOfflineFlavor)s.lastOfflineFlavor='';
   const pool=OFFLINE_FLAVORS.filter(f=>f.text!==s.lastOfflineFlavor);
   const f=pick(pool.length>0?pool:OFFLINE_FLAVORS);
@@ -781,6 +886,17 @@ function showOfflineSummary(info,done){
   html+='<div class="compare-row"><span class="cr-lbl">毛</span><span class="cr-val">'+fmtCoin(a.stones)+(stD.gt(0)?'<span class="cr-delta up">+'+fmtCoin(stD)+'</span>':'')+'</span></div>';
   html+='<div class="compare-row"><span class="cr-lbl">累计突破</span><span class="cr-val">'+a.totalBreaks+(bkD>0?'<span class="cr-delta up">+'+bkD+'</span>':'')+'</span></div>';
   html+='<div class="compare-row"><span class="cr-lbl">弟子</span><span class="cr-val">'+a.discipleCount+' 人</span></div></div>';
+  // 离线衰减提示
+  if((info.lostStone&&info.lostStone.gt(0))||(info.lostExp&&info.lostExp.gt(0))){
+    html+='<div class="tip-box warn" style="text-align:center;font-size:calc(12.5px * var(--fs-scale));margin-top:12px">';
+    html+='<span class="hl">⚠ 离线衰减</span><br>';
+    const parts=[];
+    if(info.lostStone&&info.lostStone.gt(0))parts.push('少收 <span style="color:var(--gold);font-weight:700">'+fmtCoin(info.lostStone)+' 毛</span>');
+    if(info.lostExp&&info.lostExp.gt(0))parts.push('少收 <span style="color:var(--realm);font-weight:700">'+fmtExp(info.lostExp)+' 修为</span>');
+    html+=parts.join(' · ');
+    html+='<br><span style="font-size:calc(11px * var(--fs-scale));color:var(--dim)">离线越久，收益越低。超过 24 小时不再收益。</span>';
+    html+='</div>';
+  }
   if(info.offlineBreaks&&info.offlineBreaks.length>0){
     html+='<div class="offline-highlights"><div class="oh-title">⚡ 突 破 记 录</div>';
     info.offlineBreaks.slice(0,5).forEach(b=>{html+='<div class="oh-line">· <span class="hl">'+b.name+'</span> 突破 <span class="up">'+b.count+'</span> 次，现 '+realmOf(b.level).name+'</div>'});

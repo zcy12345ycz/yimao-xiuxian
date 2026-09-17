@@ -520,14 +520,10 @@ function signInPreviewText(r){
   if(r.type==='item')return '随机道具';
   return '';
 }
+
 function showSignInModal(done){
   const today=todayStr();
   const alreadySigned=(s.signIn.lastDate===today);
-  if(alreadySigned&&(!s.signIn.dailyQuiz||s.signIn.dailyQuiz.date!==today)){
-    ensureDailyQuiz();
-  }
-  const dq=s.signIn.dailyQuiz||{date:'',questions:[],answers:[],answeredAt:0,rewardGranted:false};
-  const quizPending=alreadySigned&&dq.date===today&&!dq.rewardGranted;
 
   const cycleDay=s.signIn.cycleDay||0;
   const totalDays=s.signIn.totalDays||0;
@@ -560,24 +556,18 @@ function showSignInModal(done){
     html+='</div>';
   });
   html+='</div>';
-  html+='<div class="tip-box"><span class="hl">断签不清零</span>：只重置连续天数，累计天数保留。<br><span class="hl">毛奖励</span>随全宗门产出自动缩放，越到后期越多。<br><span class="hl">每日答题</span>：签到后答 3 道理财题，按正确率给额外奖励。</div>';
+  html+='<div class="tip-box"><span class="hl">断签不清零</span>：只重置连续天数，累计天数保留。<br><span class="hl">毛奖励</span>随全宗门产出自动缩放，越到后期越多。</div>';
   if(!alreadySigned){
     html+='<button class="btn gold" style="width:100%;padding:15px" id="signInBtn">签 到 领 取</button>';
     html+='<button class="btn" style="width:100%;margin-top:8px;padding:14px" id="signInLater">稍 后</button>';
-  } else if(quizPending){
-    html+='<div class="tip-box good" style="text-align:center"><span class="hl">今日已签到</span> · 答题还没完成</div>';
-    html+='<button class="btn gold" style="width:100%;padding:15px" id="continueQuizBtn">继 续 答 题</button>';
-    html+='<button class="btn" style="width:100%;margin-top:8px;padding:14px" id="signInLater">关 闭</button>';
   } else {
-    html+='<div class="tip-box good" style="text-align:center"><span class="hl">今日已签到 · 答题已完成</span> · 明天再来</div>';
+    html+='<div class="tip-box good" style="text-align:center"><span class="hl">今日已签到</span> · 明天再来</div>';
     html+='<button class="btn" style="width:100%;padding:15px" id="signInLater">关 闭</button>';
   }
   html+='<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
   showModal(html);
   if(!alreadySigned){
     $('signInBtn').onclick=(e)=>{e.stopPropagation();doSignIn()};
-  } else if(quizPending){
-    $('continueQuizBtn').onclick=(e)=>{e.stopPropagation();AudioSys.click();startDailyQuiz()};
   }
   $('signInLater').onclick=(e)=>{
     e.stopPropagation();
@@ -585,252 +575,51 @@ function showSignInModal(done){
     hideModal();
     if(done)done();
   };
-}function doSignIn(){
+}
+
+function doSignIn(){
   const idx=s.signIn.cycleDay||0;
-  const reward=SIGN_IN_REWARDS[idx];
-  const top=topDisciple();
-  const baseStone=signInBaseStone();
-  let granted=[];
-  if(reward.type==='stone'){
-    const v=baseStone.mul(reward.mul);
-    s.stones=s.stones.add(v);
-    granted.push('+'+fmtCoin(v)+' 毛');
-  }else if(reward.type==='exp'){
-    if(top){
-      const need=expNeed(top.level);
-      const v=need.mul(reward.mul);
-      top.exp=top.exp.add(v);
-      granted.push('+'+v.format()+' 修为');
+  const r=SIGN_IN_REWARDS[idx];
+  if(r){
+    if(r.type==='stone'){
+      const base=signInBaseStone();
+      const v=base.mul(r.mul);
+      s.stones=s.stones.add(v);
+      s.stoneFlashFlag=true;
+      showBreakFloat('🪙 +'+fmtCoin(v)+' 毛');
+    } else if(r.type==='exp'){
+      const top=topDisciple();
+      if(top){
+        const need=expNeed(top.level);
+        const v=need.mul(r.mul);
+        top.exp=top.exp.add(v);
+      }
+    } else if(r.type==='item'){
+      const pool=r.pool||['break_pill','talent_pill','rebirth_pill','long_life_pill'];
+      const itemId=pick(pool);
+      setTimeout(()=>applyItemReward(itemId),400);
     }
-  }else if(reward.type==='item'){
-    const itemId=pick(reward.pool);
-    const it=SHOP_ITEMS.find(x=>x.id===itemId);
-    granted.push(it?it.n:itemId);
-    setTimeout(()=>applyItemReward(itemId),700);
   }
-  const today=todayStr();
-  s.signIn.lastDate=today;
-  s.signIn.cycleDay=(s.signIn.cycleDay+1)%7;
+  s.signIn.lastDate=todayStr();
+  s.signIn.cycleDay=(idx+1)%7;
   s.signIn.totalDays=(s.signIn.totalDays||0)+1;
-  ensureDailyQuiz();
-  if(!s.stats)s.stats={};
-  s.stats.todaySignIn=1;
-  addWeekStat('signIns');
+  s.stats.todaySignIn=(s.stats.todaySignIn||0)+1;
   AudioSys.signIn();
   flash('gold');
-  toast('📅 签到成功 · '+granted.join(' · '),3000);
-  addChronicle('signin','📅 签到成功 · '+granted.join(' · '));
+  toast('签到成功 · 第 '+(idx+1)+' 天',2600);
+  addChronicle('signIn','📅 完成第 '+(idx+1)+' 天签到');
   checkDailyTasks();
   checkWeeklyTasks();
   renderUI();
   save();
-  setTimeout(()=>{
-    showSignInDoneModal();
-  },300);
+  hideModal();
 }
 
-
-function showSignInDoneModal(){
-  const today=todayStr();
-  const dq=s.signIn.dailyQuiz||{};
-  const quizDone=(dq.date===today&&dq.rewardGranted);
-  const quizInProgress=(dq.date===today&&!dq.rewardGranted&&Array.isArray(dq.answers)&&dq.answers.some(a=>a!==null));
-  let html='<div class="modal-title green">签 到 完 成</div>';
-  html+='<div class="modal-sub">今日签到已领取</div>';
-  if(!quizDone){
-    const sub=quizInProgress?'上次没答完，继续吗？':'答 3 道理财题 · 按正确率给额外奖励';
-    html+='<div class="tip-box" style="text-align:center"><span class="hl">凡间商道</span><br>'+sub+'</div>';
-    html+='<button class="btn gold" style="width:100%;padding:15px" id="startQuizBtn">'+(quizInProgress?'继 续 答 题':'开 始 答 题')+'</button>';
-    html+='<button class="btn" style="width:100%;margin-top:8px;padding:14px" id="skipQuizBtn">稍 后 再 说</button>';
-  } else {
-    html+='<div class="tip-box good" style="text-align:center"><span class="hl">今日答题已完成</span></div>';
-    html+='<button class="btn" style="width:100%;padding:15px" id="skipQuizBtn">关 闭</button>';
-  }
-  html+='<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
-  showModal(html);
-  const sb=$('startQuizBtn');
-  if(sb)sb.onclick=(e)=>{e.stopPropagation();AudioSys.click();startDailyQuiz()};
-  $('skipQuizBtn').onclick=(e)=>{
-    e.stopPropagation();
-    AudioSys.click();
-    hideModal();
-    renderUI();
-  };
-}
-
-/* ============ 每日答题（凡间商道） ============ */
-function ensureDailyQuiz(){
-  const today=todayStr();
-  if(!s.signIn.dailyQuiz)s.signIn.dailyQuiz={date:'',questions:[],answers:[],answeredAt:0,rewardGranted:false};
-  const dq=s.signIn.dailyQuiz;
-  if(dq.date===today&&Array.isArray(dq.questions)&&dq.questions.length===DAILY_QUIZ_COUNT){
-    return;
-  }
-  // 抽 3 题（不重复），选项顺序打乱
-  const pool=shuffle(QUIZ_BANK).slice(0,DAILY_QUIZ_COUNT);
-  dq.date=today;
-  dq.questions=pool.map(q=>{
-    const opts=q.options.slice();
-    const correctText=opts[q.answer];
-    for(let i=opts.length-1;i>0;i--){
-      const j=Math.floor(Math.random()*(i+1));
-      [opts[i],opts[j]]=[opts[j],opts[i]];
-    }
-    return {
-      question:q.question,
-      options:opts,
-      answer:opts.indexOf(correctText),
-      explain:q.explain
-    };
-  });
-  dq.answers=new Array(DAILY_QUIZ_COUNT).fill(null);
-  dq.answeredAt=0;
-  dq.rewardGranted=false;
-  save();
-}
-function startDailyQuiz(){
-  ensureDailyQuiz();
-  const dq=s.signIn.dailyQuiz;
-  if(dq.rewardGranted){showSignInModal(null);return}
-  const idx=dq.answers.findIndex(a=>a===null);
-  if(idx===-1){finishDailyQuiz();return}
-  showQuizQuestion(idx);
-}
-function showQuizQuestion(idx){
-  const dq=s.signIn.dailyQuiz;
-  const q=dq.questions[idx];
-  if(!q)return;
-  let html='<div class="modal-title" style="color:var(--gold)">凡 间 商 道</div>';
-  html+='<div class="modal-sub">今日第 '+(idx+1)+' / '+DAILY_QUIZ_COUNT+' 题</div>';
-  html+='<div class="report-from"><div class="report-avatar">📖</div><div class="report-meta"><div class="rm-name">集市见闻</div><div class="rm-title">弟子在外游历，遇到难题，请掌门指点</div></div></div>';
-  html+='<div class="report-body" style="text-align:left;padding:14px 8px;font-size:calc(14px * var(--fs-scale));line-height:1.8;background:rgba(122,184,196,.06);border-left:3px solid var(--realm);border-radius:4px;margin-bottom:12px">「'+q.question+'」</div>';
-  html+='<div class="gift-choice">';
-  q.options.forEach((opt,i)=>{
-    html+='<button class="gift-opt" data-q-opt="'+i+'"><span class="go-icon">'+String.fromCharCode(65+i)+'.</span><span class="go-info"><span class="go-name">'+opt+'</span></span></button>';
-  });
-  html+='</div>';
-  html+='<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
-  showModal(html);
-  el.modalCard.querySelectorAll('[data-q-opt]').forEach(btn=>{
-    btn.onclick=(e)=>{
-      e.stopPropagation();
-      const selected=parseInt(btn.dataset.qOpt);
-      const isCorrect=selected===q.answer;
-      dq.answers[idx]=selected;
-      dq.answeredAt=Date.now();
-      save();
-      if(isCorrect)AudioSys.success();else AudioSys.fail();
-      // 重绘为「已答」界面
-      let h2='<div class="modal-title" style="color:var(--gold)">凡 间 商 道</div>';
-      h2+='<div class="modal-sub">今日第 '+(idx+1)+' / '+DAILY_QUIZ_COUNT+' 题</div>';
-      h2+='<div class="report-body" style="text-align:left;padding:14px 8px;font-size:calc(14px * var(--fs-scale));line-height:1.8;background:rgba(122,184,196,.06);border-left:3px solid var(--realm);border-radius:4px;margin-bottom:12px">「'+q.question+'」</div>';
-      h2+='<div class="gift-choice">';
-      q.options.forEach((opt,i)=>{
-        let style='';
-        if(i===q.answer)style='border-color:var(--green);background:rgba(125,217,157,.15)';
-        else if(i===selected)style='border-color:var(--red);background:rgba(229,138,138,.15)';
-        h2+='<button class="gift-opt" style="'+style+'" disabled><span class="go-icon">'+String.fromCharCode(65+i)+'.</span><span class="go-info"><span class="go-name">'+opt+'</span></span></button>';
-      });
-      h2+='</div>';
-      h2+='<div class="tip-box '+(isCorrect?'good':'warn')+'" style="margin-top:12px;text-align:center"><span class="hl">'+(isCorrect?'✅ 答对了！':'❌ 答错了')+'</span></div>';
-      h2+='<div class="report-body" style="text-align:left;padding:12px 8px;font-size:calc(13px * var(--fs-scale));line-height:1.9;background:rgba(230,196,115,.06);border-radius:8px;margin-top:10px"><span style="color:var(--gold);font-weight:700">📝 解析：</span><br>'+q.explain+'</div>';
-      h2+='<button class="btn gold" style="width:100%;padding:15px;margin-top:14px" id="quizNextBtn">'+(idx+1>=DAILY_QUIZ_COUNT?'查 看 结 果':'下 一 题')+'</button>';
-      h2+='<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
-      showModal(h2);
-      $('quizNextBtn').onclick=(e2)=>{
-        e2.stopPropagation();
-        AudioSys.click();
-        if(idx+1>=DAILY_QUIZ_COUNT)finishDailyQuiz();
-        else showQuizQuestion(idx+1);
-      };
-    };
-  });
-}
-function calcQuizReward(correctCount,todayReward){
-  const mult=QUIZ_REWARD_MULT[correctCount]||0;
-  const baseStone=signInBaseStone();
-  const reward={stone:null,exp:null,tip:''};
-  if(todayReward.type==='stone'){
-    reward.stone=baseStone.mul(todayReward.mul*mult);
-  } else if(todayReward.type==='exp'){
-    const top=topDisciple();
-    if(top&&topDisciple()){
-      const need=expNeed(top.level);
-      reward.exp=need.mul(todayReward.mul*mult);
-    } else {
-      reward.stone=baseStone.mul(2*mult);
-    }
-  } else if(todayReward.type==='item'){
-    // 道具日：按 ×5 倍基数转毛
-    reward.stone=baseStone.mul(5*mult);
-  }
-  const labels={0:'没关系，明天再来',1:'答对一道，继续加油',2:'答对两道，不错',3:'全对！掌门英明'};
-  reward.tip=labels[correctCount]||'';
-  return reward;
-}
-function finishDailyQuiz(){
-  const dq=s.signIn.dailyQuiz;
-  let correctCount=0;
-  for(let i=0;i<dq.questions.length;i++){
-    if(dq.answers[i]===dq.questions[i].answer)correctCount++;
-  }
-  // 今天签到的是第几天（doSignIn 里 cycleDay 已经 +1，所以 -1 拿回今天）
-  const todayIdx=(s.signIn.cycleDay-1+7)%7;
-  const todayReward=SIGN_IN_REWARDS[todayIdx]||SIGN_IN_REWARDS[0];
-  const reward=calcQuizReward(correctCount,todayReward);
-  if(!dq.rewardGranted){
-    dq.rewardGranted=true;
-    if(reward.stone)s.stones=s.stones.add(reward.stone);
-    if(reward.exp){
-      const top=topDisciple();
-      if(top)top.exp=top.exp.add(reward.exp);
-    }
-    if(reward.stone)s.stoneFlashFlag=true;
-    // 记录答题统计
-    if(!s.quizStats)s.quizStats={total:0,correct:0,days:0,streak:0,bestStreak:0,history:[]};
-    s.quizStats.total+=dq.questions.length;
-    s.quizStats.correct+=correctCount;
-    s.quizStats.days=(s.quizStats.days||0)+1;
-    if(correctCount===dq.questions.length){
-      s.quizStats.streak=(s.quizStats.streak||0)+1;
-      if(s.quizStats.streak>(s.quizStats.bestStreak||0))s.quizStats.bestStreak=s.quizStats.streak;
-    } else {
-      s.quizStats.streak=0;
-    }
-    const _today=todayStr();
-    s.quizStats.history=(s.quizStats.history||[]).filter(h=>h.date!==_today);
-    s.quizStats.history.unshift({date:_today,correct:correctCount,total:dq.questions.length});
-    if(s.quizStats.history.length>30)s.quizStats.history.length=30;
-    addChronicle('signin','📖 凡间商道答对 '+correctCount+'/'+DAILY_QUIZ_COUNT+' · '+reward.tip);
-    checkAchievements();
-    save();
-  }
-  let html='<div class="modal-title '+(correctCount>=2?'green':'realm')+'">今 日 商 道</div>';
-  html+='<div class="modal-sub">答对 '+correctCount+' / '+DAILY_QUIZ_COUNT+' 题</div>';
-  html+='<div style="text-align:center;font-size:52px;margin:14px 0">'+(correctCount===3?'🌟':correctCount===2?'✨':correctCount===1?'📖':'📭')+'</div>';
-  html+='<div class="report-gain">';
-  if(reward.stone)html+='<div class="rg-item"><div class="rg-val">+'+fmtCoin(reward.stone)+'</div><div class="rg-lbl">毛</div></div>';
-  if(reward.exp)html+='<div class="rg-item"><div class="rg-val">+'+fmtExp(reward.exp)+'</div><div class="rg-lbl">修为</div></div>';
-  html+='</div>';
-  html+='<div class="tip-box" style="text-align:center;font-size:calc(12px * var(--fs-scale))">'+reward.tip+'</div>';
-  html+='<button class="btn gold" style="width:100%;padding:15px" id="quizDoneBtn">收 到</button>';
-  html+='<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
-  showModal(html,{noClose:true});
-  AudioSys.success();flash('gold');
-  $('quizDoneBtn').onclick=(e)=>{
-    e.stopPropagation();
-    AudioSys.click();
-    hideModal();
-    renderUI();
-  };
-}
-
-/* ============ 商道统计 ============ */
-function openQuizStats(){
+/* ============ 商道统计 ============ */function openQuizStats(){
   const qs=s.quizStats||{total:0,correct:0,days:0,streak:0,bestStreak:0,history:[]};
   const rate=qs.total>0?((qs.correct/qs.total)*100).toFixed(1):'0.0';
   let html='<div class="modal-title" style="color:var(--gold)">商 道 统 计</div>';
-  html+='<div class="modal-sub">凡间商道 · 理财答题记录</div>';
+  html+='<div class="modal-sub">凡间商道 · 理财答题记录（已停用，以下为历史数据）</div>';
   html+='<div class="settings-group"><div class="settings-group-h">累 计 数 据</div>';
   html+='<div class="row"><span class="row-label">累计答题</span><span class="row-value">'+qs.total+' 题</span></div>';
   html+='<div class="row"><span class="row-label">累计答对</span><span class="row-value green">'+qs.correct+' 题</span></div>';
@@ -883,8 +672,6 @@ function renderUI(){
   el.sectName.textContent=s.sectName;
   el.discipleCount.textContent=s.discipleList.length;
   el.eraNum.textContent=s.eras+1;
-  const energyEl = document.getElementById('masterEnergyText');
-  if(energyEl) energyEl.textContent = (s.masterEnergy || 0) + ' / ' + CONFIG.maxEnergy;
   if(el.playDays)el.playDays.textContent=playDays();
 if(el.soundQuickBtn){
   el.soundQuickBtn.classList.remove('off','idle');
@@ -970,30 +757,42 @@ if(el.menuBtn){
     }
     el.goalText.textContent=pctText+estText;
   }
-  const canRecruit=s.discipleList.length<maxDisciples();
-  el.btnRecruit.disabled=!canRecruit;
-  if(!canRecruit){
-    el.btnRecruit.textContent='弟子已满';
-  } else {
-    const cd=recruitCooldownRemain();
-    if(cd>0&&s.flags.firstRecruitDone){
-      el.btnRecruit.textContent='冷却 '+fmtDur(cd/1000);
+   // 收徒 FAB 状态
+  if(el.recruitFab){
+    el.recruitFab.classList.remove('disabled','cooling','full','ready');
+    if(s.discipleList.length===0&&!s.flags.firstRecruitDone){
+      // 开局：首次可收，脉冲
+      el.recruitFab.classList.add('ready');
+    } else if(s.discipleList.length>=maxDisciples()){
+      el.recruitFab.classList.add('disabled','full');
     } else {
-      el.btnRecruit.textContent='收 徒';
+      const cd=recruitCooldownRemain();
+      if(cd>0&&s.flags.firstRecruitDone){
+        el.recruitFab.classList.add('disabled','cooling');
+      }
     }
   }
+  // 顶部批阅奏章 badge
   const unread=s.memos.filter(m=>!m.read).length;
-  const autoP=(s.autoBank&&s.autoBank.count>0)?1:0;
-  const tb=unread+autoP;
-  if(tb>0){el.memoBadge.style.display='block';el.memoBadge.textContent=tb>99?'99+':tb;el.btnReport.classList.add('ready')}
-  else{el.memoBadge.style.display='none';el.btnReport.classList.remove('ready')}
-  if(s.memos.length>=MAX_MEMOS){el.memoBadge.style.display='block';el.memoBadge.textContent='满';el.memoBadge.classList.add('full')}
-  else el.memoBadge.classList.remove('full');
+  const tb=unread;
+  if(el.memoQuickBtn&&el.memoQuickDot){
+    if(tb>0){
+      el.memoQuickDot.style.display='block';
+      el.memoQuickDot.textContent=tb>99?'99+':tb;
+      el.memoQuickBtn.classList.add('ready');
+    } else {
+      el.memoQuickDot.style.display='none';
+      el.memoQuickBtn.classList.remove('ready');
+    }
+    if(s.memos.length>=MAX_MEMOS){
+      el.memoQuickDot.style.display='block';
+      el.memoQuickDot.textContent='满';
+      el.memoQuickDot.classList.add('full');
+    } else {
+      el.memoQuickDot.classList.remove('full');
+    }
+  }
 
-  // 宗门日结按钮显示控制
-  const hasDaily = s.dailyPendingRewards && (s.dailyPendingRewards.exp.gt(0) || s.dailyPendingRewards.stone.gt(0));
-  const dailyBtn = document.getElementById('btnDailySummary');
-  if(dailyBtn) dailyBtn.style.display = hasDaily ? 'block' : 'none';
   renderPhaseGoal();updateQuickDots();renderTaskProgress();
 }
 function renderStatusRows(){
@@ -1433,10 +1232,11 @@ function openWeekly(){
 /* ============ 宗门主页（4 tab） ============ */
 let _sectTab='cultivate';
 function openSectHome(){
+  // 若旧 tab 已删除，回落到修炼
+  if(_sectTab==='adventure')_sectTab='cultivate';
   let html='<div class="modal-title">宗 门</div>';
   html+='<div class="disc-tabs">';
   html+='<button class="disc-tab'+(_sectTab==='cultivate'?' active':'')+'" data-sect-tab="cultivate">🧘 修炼</button>';
-  html+='<button class="disc-tab'+(_sectTab==='adventure'?' active':'')+'" data-sect-tab="adventure">⚔️ 历练</button>';
   html+='<button class="disc-tab'+(_sectTab==='record'?' active':'')+'" data-sect-tab="record">📜 记录</button>';
   html+='<button class="disc-tab'+(_sectTab==='other'?' active':'')+'" data-sect-tab="other">🌀 其他</button>';
   html+='</div>';
@@ -1445,12 +1245,7 @@ function openSectHome(){
     cultivate:[
       {id:'disciples',ic:'👥',n:'弟子列表',d:'查看所有弟子'},
       {id:'states',ic:'🌀',n:'宗门状态',d:'弟子当前状态'},
-      {id:'relations',ic:'💞',n:'宗门关系',d:'道侣 / 宿敌 / 同乡'},
-      {id:'sect',ic:'🏯',n:'宗门建设',d:'升级建筑'}
-    ],
-    adventure:[
-      {id:'mijing',ic:'🗺️',n:'秘境试炼',d:'深入险地，收益丰厚'},
-      {id:'expedition',ic:'🧭',n:'外派游历',d:'派弟子出门游历'}
+      {id:'relations',ic:'💞',n:'宗门关系',d:'道侣 / 宿敌 / 同乡'}
     ],
     record:[
       {id:'chronicle',ic:'📜',n:'本纪史册',d:'宗门大事记'},
@@ -1459,12 +1254,10 @@ function openSectHome(){
       {id:'legacy',ic:'♻️',n:'传承树',d:'转生永久加成'}
     ],
     other:[
-      {id:'vice',ic:'🧙',n:'副掌门',d:'自动处理日常'},
       {id:'relic',ic:'🕯️',n:'英魂遗物',d:'永久加成'},
       {id:'daily',ic:'📋',n:'今日修行',d:'每日任务与奖励'},
       {id:'weekly',ic:'📊',n:'宗门月旦评',d:'每周任务与奖励'},
-      {id:'stats',ic:'📈',n:'宗门数据总览',d:'实时产出与统计'},
-      {id:'quizStats',ic:'📊',n:'商道统计',d:'凡间商道答题记录'}
+      {id:'stats',ic:'📈',n:'宗门数据总览',d:'实时产出与统计'}
     ]
   };
   (items[_sectTab]||[]).forEach(it=>{
@@ -1483,16 +1276,14 @@ function openSectHome(){
       const act=slot.dataset.sectAct;
       const map={
         disciples:openDisciples, states:openStatesOverview, relations:openRelations,
-        sect:openSect, mijing:openMijingSelect, expedition:openExpedition,
         chronicle:openChronicle, yearbook:openYearbook, achieve:openAchievements,
-        legacy:openLegacy, vice:openVice, relic:openRelics,
-        daily:openDaily, weekly:openWeekly, stats:openSectStats, quizStats:openQuizStats
+        legacy:openLegacy, relic:openRelics,
+        daily:openDaily, weekly:openWeekly, stats:openSectStats
       };
       if(map[act])map[act]();
     };
   });
 }
-
 
 /* ============ 外派 UI ============ */
 function openExpedition(){
@@ -1657,7 +1448,6 @@ function openYearbookDetail(idx){
 /* ============ 奏章 ============ */
 let memoTab='all';
 function openMemos(){
-  flushAutoBank();
   if(s.memos.length===0){
     let html='<div class="modal-title">奏 章</div><div class="modal-sub">待批 0 份</div><div class="memo-empty"><span class="me-icon">📭</span>暂无待批奏章</div><div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
     showModal(html);return;
@@ -1665,12 +1455,11 @@ function openMemos(){
   const unread=s.memos.filter(m=>!m.read).length;
   let html='<div class="modal-title">奏 章 堆 积</div>';
   html+='<div class="modal-sub">共 '+s.memos.length+' 份 · 未批 '+unread+' 份'+(s.memos.length>=MAX_MEMOS?' · <span style="color:var(--gold)">已满</span>':'')+'</div>';
-  html+='<div class="memo-tabs"><button class="memo-tab'+(memoTab==='all'?' active':'')+'" data-tab="all">全部</button><button class="memo-tab'+(memoTab==='event'?' active':'')+'" data-tab="event">事件</button><button class="memo-tab'+(memoTab==='break'?' active':'')+'" data-tab="break">突破</button></div>';
+  html+='<div class="memo-tabs"><button class="memo-tab'+(memoTab==='all'?' active':'')+'" data-tab="all">全部</button><button class="memo-tab'+(memoTab==='event'?' active':'')+'" data-tab="event">事件</button></div>';
   html+='<div class="memo-list">';
   let shown=0;
   s.memos.forEach((m,idx)=>{
     if(memoTab==='event'&&!m.event)return;
-    if(memoTab==='break'&&m.breaks.length===0)return;
     shown++;
     const isChain=m.event&&m.event.chainId;
     const isWorld=m.event&&m.event.worldChallenge;
@@ -1682,16 +1471,11 @@ function openMemos(){
     }
     const isU=m.read?'':' unread';
     let title='日常奏报';
-    if(m.breaks.length>0&&!m.isQuiz)title='突破奏报';
+    if(m.isQuiz)title='凡间商道 · 理财问答';
     if(m.event&&!m.isQuiz)title='急报 · '+m.event.title;
-    if(m.chatter&&m.breaks.length===0&&!m.event&&!m.isQuiz)title='弟子闲聊';
-    if(m.isOffline)title='🔒 闭关总结';
-    if(m.isAutoBank)title='📦 副掌门汇总';
     let sc='',st='奏';
-    if(m.isAutoBank){sc=' autobank';st='副'}
-    else if(m.isOffline){sc=' offline';st='关'}
+    if(m.isQuiz){sc=' quiz';st='商'}
     else if(m.event){sc=isWorld?' world':(isChain?' chain':' event');st=isWorld?'天':(isChain?'链':'急')}
-    else if(m.chatter){sc=' chatter';st='聊'}
     html+='<div class="memo-item'+hasE+isU+'" data-memo="'+idx+'">';
     html+='<div class="memo-seal'+sc+'">'+st+'</div>';
     html+='<div class="memo-info"><div class="memo-title">'+(m.read?'':'<span class="dot"></span>')+title+'</div>';
@@ -1700,34 +1484,10 @@ function openMemos(){
   });
   if(shown===0)html+='<div class="memo-empty" style="padding:20px"><span class="me-icon">🔍</span>暂无</div>';
   html+='</div>';
-  if(memoTab==='all'&&unread>0)html+='<button class="btn gold" style="width:100%;margin-top:12px;padding:14px" id="batchApprove">一 键 批 阅（无事件）</button>';
   html+='<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
   showModal(html);
   el.modalCard.querySelectorAll('[data-tab]').forEach(tab=>{tab.onclick=(e)=>{e.stopPropagation();AudioSys.click();memoTab=tab.dataset.tab;openMemos()}});
   el.modalCard.querySelectorAll('[data-memo]').forEach(item=>{item.onclick=(e)=>{e.stopPropagation();AudioSys.click();openMemoDetail(+item.dataset.memo)}});
-  const bb=$('batchApprove');if(bb)bb.onclick=(e)=>{e.stopPropagation();AudioSys.click();batchApprove()};
-}
-function batchApprove(){
-  let count=0,tE=new Dec(0,0),tS=new Dec(0,0),bn=[];
-  const toRemove=[];
-  for(let i=0;i<s.memos.length;i++){
-    const m=s.memos[i];if(m.read||m.event)continue;
-    count++;tE=tE.add(m.totalExp);tS=tS.add(m.totalStone);
-    m.breaks.forEach(b=>bn.push(b.name));
-    s.stats.todayMemosRead=(s.stats.todayMemosRead||0)+1;
-    toRemove.push(m);
-  }
-  if(count===0){toast('没有可一键批阅的奏章');return}
-  toRemove.forEach(m=>{const i=s.memos.indexOf(m);if(i>=0)s.memos.splice(i,1)});
-  checkDailyTasks();AudioSys.success();
-  let html='<div class="modal-title green">一 键 批 阅</div><div class="modal-sub">共批阅 '+count+' 份奏章</div>';
-  html+='<div class="report-gain"><div class="rg-item"><div class="rg-val">+'+fmtExp(tE)+'</div><div class="rg-lbl">修为</div></div><div class="rg-item"><div class="rg-val">+'+fmtCoin(tS)+'</div><div class="rg-lbl">毛</div></div><div class="rg-item"><div class="rg-val">'+fmtCoin(s.stones)+'</div><div class="rg-lbl">毛总</div></div></div>';
-  if(bn.length>0)html+='<div class="tip-box good" style="text-align:center"><span class="hl">突破</span>：'+bn.slice(0,4).join('、')+(bn.length>4?' 等'+bn.length+'人':'')+'</div>';
-  html+='<button class="btn gold" style="width:100%;padding:15px" id="batchOk">收 到</button>';
-  html+='<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
-  showModal(html);
-  $('batchOk').onclick=(e)=>{e.stopPropagation();AudioSys.click();renderUI();openMemos()};
-  renderUI();
 }
 function openMemoDetail(idx){
   const m=s.memos[idx];if(!m)return;
@@ -1735,28 +1495,33 @@ function openMemoDetail(idx){
   if(m.isQuiz){showQuizModal(m,idx);return}
   if(!m.read)s.stats.todayMemosRead=(s.stats.todayMemosRead||0)+1;
   m.read=true;checkDailyTasks();renderUI();
+
+  // 古风问答分支
+  if(m.event && m.event.isGufeng){
+    showGufengQuestion(m, idx);
+    return;
+  }
+
   const top=topDisciple();
   // 若事件绑定了弟子，用它作为“禀报者”
   const narrator=(m.event&&m.event.discipleId)?s.discipleList.find(d=>d.id===m.event.discipleId):null;
   const reporter=narrator||top;
-  let title='奏 章';if(m.isOffline)title='闭 关 总 结';if(m.isAutoBank)title='副 掌 门 汇 总';
+  let title='奏 章';
   let html='<div class="modal-title">'+title+'</div>';
-  html+='<div class="modal-sub">'+fmtClock(m.time)+(m.isAutoBank?(' · 共 '+m.autoCount+' 份 · 已扣 '+VICE_CUT*100+'% 抽成'):(' · 间隔 '+fmtDur(m.interval/1000)))+'</div>';
+  html+='<div class="modal-sub">'+fmtClock(m.time)+' · 间隔 '+fmtDur(m.interval/1000)+'</div>';
   if(reporter){const p=getP(reporter),r=realmOf(reporter.level),apt=getApt(reporter),root=getRoot(reporter),sp=getSpecialty(reporter);
     const chiefMark=(top&&reporter.id===top.id)?' 👑':'';
     html+='<div class="report-from"><div class="report-avatar">'+svgAvatar(reporter,48)+'</div><div class="report-meta"><div class="rm-name">'+reporter.name+(reporter.chosen?' ✨':'')+chiefMark+'</div><div class="rm-title">'+r.name+' · '+p.n+' · '+apt.n+'资质 · '+root.ic+root.n+'灵根 · '+sp.ic+sp.n+' · '+reporter.age+'岁<br><span style="color:var(--dimmer);font-size:calc(11px * var(--fs-scale))">'+p.desc+'</span></div></div></div>';
   }
   let body='';
-  if(m.isOffline)body+='<span class="rl">掌门闭关期间，弟子们勤修不辍。</span>';
-  else if(m.isAutoBank)body+='<span class="rl">副掌门已将 '+m.autoCount+' 份日常奏章整理成汇总（抽成 '+VICE_CUT*100+'%）。</span>';
-  else body+='<span class="rl">'+m.greeting+'</span>';
+  body+='<span class="rl">'+(m.greeting||getDailyDesc())+'</span>';
   if(m.breaks.length===0&&m.fails.length===0)body+='<span class="rl dim">'+(m.daily||'弟子们都在安静修炼。')+'</span>';
   else{
     for(const b of m.breaks){const r=realmOf(b.level);const txt=getBreakText(b.isBig);body+='<span class="rl">⚡ <span class="hl">'+b.name+'</span> '+txt+' <span class="up">'+r.name+'</span>！</span>'}
     for(const f of m.fails)body+='<span class="rl dim">'+f.name+' '+getFailText()+'</span>';
   }
   body+='<span class="rl dim">'+getGainText()+' <span class="up">+'+fmtExp(m.totalExp)+'</span>，毛 <span class="up">+'+fmtCoin(m.totalStone)+'</span>。</span>';
-  if(!m.isOffline&&!m.isAutoBank)body+='<span class="rl dim">'+m.voice+'</span>';
+  if(m.voice)body+='<span class="rl dim">'+m.voice+'</span>';
   html+='<div class="report-body">'+body+'</div>';
   if(m.chatter){
     html+='<div class="chatter-box"><div class="chatter-line"><span class="cn" style="color:var(--dim)">📖 '+m.chatter.title+'</span></div>';
@@ -1765,8 +1530,6 @@ function openMemoDetail(idx){
   }
   html+='<div class="report-gain"><div class="rg-item"><div class="rg-val">'+fmtExp(m.totalExp)+'</div><div class="rg-lbl">修为</div></div><div class="rg-item"><div class="rg-val">'+fmtCoin(m.totalStone)+'</div><div class="rg-lbl">毛</div></div></div>';
 if(m.event){
-  const noEnergy = s.masterEnergy <= 0;
-  if(noEnergy) html += '<div class="tip-box warn" style="text-align:center;margin-top:10px">⚡ 掌门精力不足，无法决断此事。弟子们仍在等待。</div>';
     const ev=m.event;const sn=s.stones.toNum();
     const isChain=!!ev.chainId;
     const isWorld=!!ev.worldChallenge;
@@ -1798,7 +1561,7 @@ if(m.event){
       else safeColor='var(--red)';
       const probLine='<div style="margin-top:6px;font-size:calc(11.5px * var(--fs-scale));color:var(--dim)">成算 <span style="color:'+probColor+';font-weight:700">'+successPct+'%</span> · 全身而退 <span style="color:'+safeColor+';font-weight:700">'+safePct+'%</span>'+(riskPct>0?' · 恐有 '+riskPct+'% 不测':'')+'</div>';
       
-        html+='<button class="choice-btn'+((cant||noEnergy)?' locked':'')+'" data-choice="'+i+'"><div class="choice-name"><span>'+c.n+'</span><span class="tag '+(cant?'locked':(isWorld?'world':c.tag))+'">'+(cant?'毛不足':c.tagText)+'</span></div><div class="choice-desc">'+c.desc+'</div>'+probLine+'</button>';
+        html+='<button class="choice-btn'+(cant?' locked':'')+'" data-choice="'+i+'"><div class="choice-name"><span>'+c.n+'</span><span class="tag '+(cant?'locked':(isWorld?'world':c.tag))+'">'+(cant?'毛不足':c.tagText)+'</span></div><div class="choice-desc">'+c.desc+'</div>'+probLine+'</button>';
     });
     html+='</div>';
     html+='<div class="report-sign">—— 弟子 '+s.discipleList.map(d=>d.name).join('、')+' 敬上</div>';
@@ -1807,8 +1570,7 @@ if(m.event){
     el.modalCard.querySelectorAll('[data-choice]').forEach(btn=>{
       btn.onclick=(e)=>{
         e.stopPropagation();
-        if(btn.classList.contains('locked')){toast(noEnergy ? '掌门精力不足' : '毛不足');return}
-        if(!consumeEnergy(1)){toast('掌门精力不足');return}
+        if(btn.classList.contains('locked')){toast('毛不足');return}
         AudioSys.click();
         const c=ev.choices[+btn.dataset.choice];
         const outcome=rollOutcome(c,_actorForCalc);
@@ -1822,6 +1584,126 @@ if(m.event){
     showModal(html);
     $('backToList').onclick=(e)=>{e.stopPropagation();AudioSys.click();const i2=s.memos.indexOf(m);if(i2>=0)s.memos.splice(i2,1);renderUI();openMemos()};
   }
+}
+
+/* ============ 凡间见闻 · 古风问答 UI ============ */
+function showGufengQuestion(m, idx){
+  const ev=m.event;
+  const actor=s.discipleList.find(d=>d.id===ev.discipleId);
+  if(!actor){
+    // 弟子不在了（化道/叛逃），直接移除
+    const i=s.memos.indexOf(m);
+    if(i>=0)s.memos.splice(i,1);
+    renderUI();
+    openMemos();
+    return;
+  }
+
+  // 悟性提示：悟性 ≥ GUFENG_HINT_COMP 时，有概率去掉一个错选项
+  let hintIdx=-1;
+  if((actor.comprehension||0)>=GUFENG_HINT_COMP && Math.random()<GUFENG_HINT_CHANCE){
+    const wrongIdxs=ev.options.map((o,i)=>o.ok?-1:i).filter(i=>i>=0);
+    if(wrongIdxs.length>0)hintIdx=pick(wrongIdxs);
+  }
+
+  let html='<div class="modal-title" style="color:var(--gold)">凡 间 见 闻</div>';
+  html+='<div class="modal-sub">弟子 '+actor.name+' · '+ev.title+'</div>';
+  html+='<div class="report-from"><div class="report-avatar">'+svgAvatar(actor,48)+'</div><div class="report-meta"><div class="rm-name">'+actor.name+'</div><div class="rm-title">'+realmOf(actor.level).name+' · '+getP(actor).n+'</div></div></div>';
+  html+='<div class="report-body" style="text-align:left;padding:14px 8px;font-size:calc(14px * var(--fs-scale));line-height:1.8;background:rgba(122,184,196,.06);border-left:3px solid var(--realm);border-radius:4px;margin-bottom:12px">'+ev.icon+' '+ev.scene+'</div>';
+  if(hintIdx>=0){
+    html+='<div class="tip-box purple" style="text-align:center;font-size:calc(12px * var(--fs-scale));margin-bottom:10px"><span class="hl">💡 弟子悟性过人</span> · 已排除一个错误选项</div>';
+  }
+  html+='<div class="gift-choice">';
+  ev.options.forEach((opt,i)=>{
+    if(i===hintIdx){
+      html+='<button class="gift-opt locked" data-gq-opt="'+i+'" disabled><span class="go-icon">'+String.fromCharCode(65+i)+'.</span><span class="go-info"><span class="go-name" style="text-decoration:line-through;opacity:.5">'+opt.text+'</span></span><span class="go-cost" style="color:var(--dimmer)">已排除</span></button>';
+    } else {
+      html+='<button class="gift-opt" data-gq-opt="'+i+'"><span class="go-icon">'+String.fromCharCode(65+i)+'.</span><span class="go-info"><span class="go-name">'+opt.text+'</span></span></button>';
+    }
+  });
+  html+='</div>';
+  html+='<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
+  showModal(html);
+
+  el.modalCard.querySelectorAll('[data-gq-opt]').forEach(btn=>{
+    btn.onclick=(e)=>{
+      e.stopPropagation();
+      if(btn.disabled)return;
+      const selected=parseInt(btn.dataset.gqOpt);
+      const opt=ev.options[selected];
+      const isCorrect=!!opt.ok;
+      AudioSys.click();
+
+      // 福缘：答错时，福缘 ≥ GUFENG_LUCKY_LUCK 有概率蒙对
+      let luckySave=false;
+      if(!isCorrect && (actor.luck||0)>=GUFENG_LUCKY_LUCK && Math.random()<GUFENG_LUCKY_CHANCE){
+        luckySave=true;
+      }
+      const effectiveCorrect=isCorrect||luckySave;
+
+      // 修为变化（用性格 expMul 加权）
+      const need=expNeed(actor.level);
+      const pMul=getP(actor).expMul||1;
+      let expDelta;
+      if(effectiveCorrect)expDelta=need.mul(GUFENG_EXP_GAIN).mul(pMul);
+      else expDelta=need.mul(-GUFENG_EXP_LOSE).mul(pMul);
+      actor.exp=actor.exp.add(expDelta);
+      if(actor.exp.lt(0))actor.exp=new Dec(0,0);
+
+      // 记录史册
+      const resultTxt=luckySave?'蒙对':(isCorrect?'答对':'答错');
+      addChronicle('gufeng','📖 凡间见闻「'+ev.title+'」 · '+resultTxt+' · '+actor.name);
+
+      // 从列表移除
+      const i2=s.memos.indexOf(m);
+      if(i2>=0)s.memos.splice(i2,1);
+
+      // 显示结果
+      showGufengResult(ev, actor, isCorrect, luckySave, expDelta);
+    };
+  });
+}
+function showGufengResult(ev, actor, isCorrect, luckySave, expDelta){
+  let titleTxt, titleCls;
+  if(luckySave){titleTxt='蒙 对 了';titleCls='green';}
+  else if(isCorrect){titleTxt='答 对 了';titleCls='green';}
+  else {titleTxt='答 错 了';titleCls='red';}
+  let html='<div class="modal-title '+titleCls+'">'+titleTxt+'</div>';
+  html+='<div class="modal-sub">弟子 '+actor.name+' · '+ev.title+'</div>';
+
+  // 正确选项
+  const correctOpt=ev.options.find(o=>o.ok);
+  const correctText=correctOpt?correctOpt.text:'';
+  html+='<div class="report-body" style="text-align:left;padding:12px 8px;font-size:calc(13.5px * var(--fs-scale));line-height:1.9;background:rgba(122,184,196,.06);border-left:3px solid var(--realm);border-radius:4px;margin-bottom:10px">';
+  html+='掌门指点：<br><span style="color:var(--gold);font-weight:700">「'+correctText+'」</span>';
+  html+='</div>';
+
+  // 掌门批注
+  html+='<div class="pz-box"><div class="pz-lbl">📝 掌 门 批 注</div><div class="pz-text">「'+ev.explain+'」</div></div>';
+
+  // 蒙对提示
+  if(luckySave){
+    html+='<div class="tip-box purple" style="text-align:center;font-size:calc(12px * var(--fs-scale));margin-bottom:10px"><span class="hl">🍀 弟子福缘深厚</span> · 误打误撞蒙对了</div>';
+  }
+
+  // 修为变化
+  const isPos=expDelta.gte(0);
+  html+='<div class="report-gain"><div class="rg-item"><div class="rg-val" style="color:'+(isPos?'var(--green)':'var(--red)')+'">'+(isPos?'+':'')+fmtExp(expDelta)+'</div><div class="rg-lbl">'+actor.name+' 修为</div></div></div>';
+
+  html+='<button class="btn gold" style="width:100%;padding:15px" id="gqOk">收 到</button>';
+  html+='<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
+  showModal(html,{noClose:true});
+
+  if(isCorrect||luckySave)AudioSys.success();
+  else AudioSys.fail();
+
+  $('gqOk').onclick=(e)=>{
+    e.stopPropagation();
+    AudioSys.click();
+    hideModal();
+    renderUI();
+    openMemos();
+  };
 }
 function handleMemoChoice(choice,outcome,memo,idx){
   // 从事件里找出主角弟子，找不到就退回首席
@@ -2416,21 +2298,6 @@ function openRelations(){
   showModal(html);
 }
 
-/* ============ 副掌门 ============ */
-function openVice(){
-  const cutTot=s.viceCutTotal||new Dec(0,0);
-  let html='<div class="modal-title">副 掌 门</div><div class="modal-sub">宗门日常事务总管</div>';
-  html+='<div class="tip-box purple"><span class="hl">副掌门</span>是宗门的管家，可代掌门处理无事件的日常奏章。</div>';
-  html+='<div class="row"><span class="row-label">副掌门状态</span><span class="row-value '+(s.viceEnabled?'up':'')+'">'+(s.viceEnabled?'已聘用':'未聘用')+'</span></div>';
-  html+='<div class="row"><span class="row-label">抽成比例</span><span class="row-value gold">'+(VICE_CUT*100)+'%（每份奏章的毛）</span></div>';
-  if(cutTot.gt(0))html+='<div class="row"><span class="row-label">累计抽成</span><span class="row-value red">'+fmtCoin(cutTot)+'</span></div>';
-  html+='<button class="btn gold" style="width:100%;padding:15px;margin-top:14px" id="viceToggle">'+(s.viceEnabled?'解 聘 副 掌 门':'聘 请 副 掌 门')+'</button>';
-  html+='<div class="tip-box" style="font-size:calc(12px * var(--fs-scale))"><span class="hl">效果</span>：<br>· 无事件的日常奏章将自动合并<br>· 每份奏章副掌门抽取 <span class="hl">10% 的毛</span> 作为报酬<br>· 修为不抽成</div>';
-  html+='<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
-  showModal(html);
-  $('viceToggle').onclick=(e)=>{e.stopPropagation();s.viceEnabled=!s.viceEnabled;AudioSys.click();toast(s.viceEnabled?'已聘请副掌门（抽成 10%）':'已解聘副掌门');save();openVice()};
-}
-
 /* ============ 掌门月令弹窗 ============ */
 function moonOrderCooldownRemain(){
   if(!s.moonOrderChangedAt)return 0;
@@ -2896,7 +2763,6 @@ function _helpCoreContent(){
   html+='<div class="help-section"><div class="help-h">📖 你是掌门</div><div class="help-p">你是掌门。弟子在你门下修行。<br>你只需<span class="hl">批阅奏章、定方向、批资源</span>。</div></div>';
   html+='<div class="help-section"><div class="help-h">🎛️ 主界面入口</div><div class="help-p"><span class="hl">右上角 4 个按钮</span>（从左到右）：<br>· 📅 每日签到<br>· 🔊 声音总开关（一点全开/全关）<br>· ☰ 菜单（设置 / 帮助 / 存档 / 打赏）<br>· ❓ 玩法说明<br><br><span class="hl">底部 4 个按钮</span>（从左到右）：<br>· 批阅奏章（处理待批事件）<br>· 宗门日结（一键领取累积收益）<br>· 收徒<br>· 🏯 宗门（弟子 / 秘境 / 外派 / 记录 等总入口）<br><br><span class="hl">右侧 🪙 打赏按钮</span>：悬停或触摸会亮起，点开是「赏我一毛」。</div></div>';
   html+='<div class="help-section"><div class="help-h">📅 每日签到</div><div class="help-p">每天首次打开游戏弹签到。<span class="hl">7 天一轮</span>：<br>· 第 1/2/4/6/7 天给毛<br>· 第 3 天给修为<br>· 第 5 天给道具（破障丹 / 招贤令 / 洗髓丹 / 延寿丹）<br><span class="hl">断签不清零</span>，只重置连续天数。累计天数保留。<br><span class="hl">毛奖励</span>随全宗门产出自动缩放，越到后期越多。<br>签到后可选择<span class="hl">继续答题</span>，也可<span class="hl">稍后再答</span>。当天再点 📅 可继续。</div></div>';
-  html+='<div class="help-section"><div class="help-h">📖 凡间商道</div><div class="help-p">签到完成后可选答 <span class="hl">3 道理财题</span>（每天一次）。<br>每题 3 个选项，答完立即看对错与解析。<br>按正确率给<span class="hl">额外奖励</span>：<br>· 3/3：当日签到奖励 ×0.8<br>· 2/3：×0.5<br>· 1/3：×0.2<br>· 0/3：×0.05<br>奖励类型<span class="hl">跟随当天签到</span>：毛日给毛、修为日给修为、道具日转为毛。<br>答错了也没关系，明天再来。<br>答题记录可在 <span class="hl">🏯 宗门 → 🌀 其他 → 商道统计</span> 查看。</div></div>';
   html+='<div class="help-section"><div class="help-h">📊 宗门月旦评</div><div class="help-p">每周一凌晨 4 点刷新 <span class="hl">3 个周目标</span>。<br>完成时<span class="hl">自动发奖</span>，全部完成额外给一件稀有道具（破障丹 / 招贤令 / 同心结 / 洗髓丹 / 延寿丹之一）。<br>周目标包括：突破、秘境、事件、签到、收徒、外派、天象等。<br>查看入口：🏯 宗门 → 🌀 其他 → 宗门月旦评。</div></div>';
   const _moonCdH=Math.round(CONFIG.moonOrderCooldown/3600000);
   html+='<div class="help-section"><div class="help-h">🌙 掌门月令</div><div class="help-p">宗门当前方针，随时可切换，<span class="hl">每 '+_moonCdH+' 小时只能切换一次</span>。<br>五种月令：<br>· <span class="hl">🧘 潜修</span>：修为 +25%，毛 -15%<br>· <span class="hl">💰 敛财</span>：毛 +30%，修为 -10%<br>· <span class="hl">⚔️ 历练</span>：外派与秘境收益 +20%<br>· <span class="hl">🤝 外交</span>：忠诚 +0.2/天，天下事件收益 +30%<br>· <span class="hl">🌿 休养</span>：忠诚 +0.5/天，产出 -15%<br>主界面月令行显示当前方针与冷却倒计时，点击可切换。</div></div>';
@@ -2908,12 +2774,10 @@ function _helpCoreContent(){
   LOYALTY_TIERS.forEach(t=>{html+='<div class="loyalty-row2"><span class="lvl">'+t.ic+' '+t.n+'（'+t.min+'+）</span><span class="eff">'+t.desc+'</span></div>'});
   html+='</div></div>';
   html+='<div class="help-section"><div class="help-h">⏳ 寿元与化道</div><div class="help-p">弟子有年龄。修为越高，寿元越长（<span class="hl">80 + 等级×5</span>）。寿元剩下 10 年以内会显示 ⏳ 提醒。寿元尽了会<span class="hl">化道</span>，留下<span class="hl">遗物</span>永久加成。</div></div>';
-  html+='<div class="help-section"><div class="help-h">🧙 副掌门</div><div class="help-p">聘用副掌门后，<span class="hl">无事件的日常奏章会自动合并</span>成一份「副掌门汇总」。<br>报酬：每份奏章抽取 <span class="hl">10% 的毛</span>。<br>你只需要处理带事件的奏章。<br>入口：🏯 宗门 → 🌀 其他 → 副掌门。</div></div>';
   html+='<div class="help-section"><div class="help-h">📋 今日修行</div><div class="help-p">每日任务凌晨 <span class="hl">4 点</span>刷新，共 3 条。<br>每条<span class="hl">完成时自动发奖</span>（毛 / 修为立即到账），无需手动领取。<br>主界面底部会显示一条进度行 <span class="hl">「📋 今日 X/3 · 周 X/3」</span>，点击可查看进度。<br><span class="hl">全部完成</span>时，额外获得 5 分钟全宗门修为 ×2 加成，进度行自动隐藏。<br>查看入口：🏯 宗门 → 🌀 其他 → 今日修行。</div></div>';
-  html+='<div class="help-section"><div class="help-h">📜 奏章堆积</div><div class="help-p">弟子定期上奏，最多攒 <span class="hl">20 份</span>。满了会暂停生成，但修为和毛仍在累积。离线回来会生成 <span class="hl">1 份闭关总结</span>，超过 2 小时会附带一段<span class="hl">离线小叙事</span>。</div></div>';
+  html+='<div class="help-section"><div class="help-h">📜 凡间见闻</div><div class="help-p">弟子在外游历，会遇到各种人和事。<br>每 <span class="hl">8 小时</span> 刷新一道，最多攒 <span class="hl">6 道</span>。<br>每道题三个选择，选对弟子<span class="hl">忠诚 +2</span>，选错<span class="hl">忠诚 -1</span>。<br>答完会看到<span class="hl">掌门批注</span>——既是解析，也是教诲。<br>查看入口：底部「批阅奏章」。</div></div>';
   html+='<div class="help-section"><div class="help-h">🎁 待生效道具</div><div class="help-p">道具通过 <span class="hl">签到 / 周常 / 成就</span>获得。<br>· <span class="hl">破障丹</span>：首席下次突破 +50%<br>· <span class="hl">招贤令</span>：下个弟子必为天才<br>· <span class="hl">同心结</span>：自动撮合一对弟子为道侣<br>· <span class="hl">洗髓丹</span>：随机弟子属性重掷<br>· <span class="hl">延寿丹</span>：随机弟子 +50 年寿元<br>重复获取同一种待生效道具时，奖励转为毛。</div></div>';
   html+='<div class="help-section"><div class="help-h">🗣️ 方言模式</div><div class="help-p">游戏默认使用<span class="hl">四川方言</span>。可在设置里切换为普通话。</div></div>';
-  html+='<div class="help-section"><div class="help-h">⚡ 掌门精力</div><div class="help-p">精力是掌门的决策资源，<span class="hl">处理“江湖见闻”事件需要消耗 1 点精力</span>。<br>· 精力上限：<span class="hl">5 点</span><br>· 恢复速度：每 <span class="hl">4 小时</span> 恢复 1 点<br>· 日常奏章、理财问答、弟子个人剧情 <span class="hl">不消耗精力</span><br>· 精力不足时，弟子们会继续挂机，但“江湖见闻”事件无法处理。<br>请谨慎分配你的精力，优先处理那些关乎弟子前途、宗门走向的重大抉择。</div></div>';
   html+='<div class="help-section"><div class="help-h">👤 关于作者</div><div class="help-p">我是 <span class="hl">Zhao | Struct. E.</span>，一名一级注册结构工程师。<br>完全不懂编程，这个游戏是用 AI 做出来的。<br>如果你发现了 bug，不用告诉我，因为我也不会改。</div></div>';
   return html;
 }
@@ -3522,34 +3386,4 @@ function showQuizModal(m, idx) {
       };
     };
   });
-}
-
-/* ============ 宗门日结 ============ */
-function openDailySummary() {
-  if (!s.dailyPendingRewards) return;
-  const exp = s.dailyPendingRewards.exp;
-  const stone = s.dailyPendingRewards.stone;
-  
-  if (exp.gt(0) || stone.gt(0)) {
-    let html = '<div class="modal-title green">宗 门 日 结</div>';
-    html += '<div class="modal-sub">弟子们照常修行，宗门进账如下</div>';
-    html += '<div class="report-gain"><div class="rg-item"><div class="rg-val">+'+fmtExp(exp)+'</div><div class="rg-lbl">修为</div></div><div class="rg-item"><div class="rg-val">+'+fmtCoin(stone)+'</div><div class="rg-lbl">毛</div></div></div>';
-    html += '<div class="tip-box" style="text-align:center;font-size:calc(12px * var(--fs-scale))">无需消耗精力，一键入账</div>';
-    html += '<button class="btn gold" style="width:100%;padding:15px" id="dailyOk">收 到</button>';
-    html += '<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
-    showModal(html, {noClose:true});
-    AudioSys.success();
-    
-    $('dailyOk').onclick = (e) => {
-      e.stopPropagation();
-      AudioSys.click();
-      // 清空累积
-      s.dailyPendingRewards = { exp: new Dec(0,0), stone: new Dec(0,0) };
-      hideModal();
-      renderUI();
-      save();
-    };
-  } else {
-    toast('暂无日结收益');
-  }
 }

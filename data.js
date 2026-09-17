@@ -1,5 +1,5 @@
 /* ============ 版本 ============ */
-const GAME_VERSION='v0.9.6.3';
+const GAME_VERSION='v0.9';
 const GAME_AUTHOR='Zhao | Struct. E.';
 const CURRENT_SAVE_VERSION=4;
 let DEC_LONG_FORMAT=false;
@@ -83,12 +83,16 @@ const CONFIG = {
   targetMao: 1400000000,            // 终极目标：14 亿毛
   grandTournamentMao: 10000000,     // 宗门大比触发阈值：1000 万毛
   refreshHour: 4,                   // 每日刷新时间（凌晨 4 点）
-  viceCut: 0.10,                    // 副掌门抽成比例
   yearDuration: 30 * 86400000,      // 年鉴周期：30 天
-  // ---- 掌门精力 ----
-  maxEnergy: 5,                         // 精力上限
-  energyRecoverInterval: 4 * 3600 * 1000, // 每4小时恢复1点精力
-
+  // ---- 古风问答（凡间见闻）----
+  gufengRefreshInterval: 8 * 3600 * 1000, // 每 8 小时刷新 1 道
+  gufengMaxPending: 6,                    // 最多保留 6 道
+  gufengExpGain: 0.08,                    // 答对：当前等级需求修为的 8%
+  gufengExpLose: 0.03,                    // 答错：当前等级需求修为的 -3%
+  gufengHintComp: 70,                     // 悟性达到此值 → 有概率给出提示（去掉一个错选项）
+  gufengHintChance: 0.5,                  // 提示触发概率
+  gufengLuckyLuck: 70,                    // 福缘达到此值 → 答错有概率蒙对
+  gufengLuckyChance: 0.3,                 // 蒙对触发概率
       // ---- 掌门月令 ----
   moonOrderDefault: 'cultivate',    // 默认月令
   moonOrderCooldown: 12 * 3600 * 1000, // 月令切换冷却：12 小时
@@ -123,8 +127,15 @@ const ERA_BONUS=CONFIG.eraBonus;
 const ERA_RESET_LEVEL=CONFIG.eraResetLevel;
 const TARGET_MAO=CONFIG.targetMao;
 const REFRESH_HOUR=CONFIG.refreshHour;
-const VICE_CUT=CONFIG.viceCut;
 const YEAR_DURATION=CONFIG.yearDuration;
+const GUFENG_REFRESH_INTERVAL=CONFIG.gufengRefreshInterval;
+const GUFENG_MAX_PENDING=CONFIG.gufengMaxPending;
+const GUFENG_EXP_GAIN=CONFIG.gufengExpGain;
+const GUFENG_EXP_LOSE=CONFIG.gufengExpLose;
+const GUFENG_HINT_COMP=CONFIG.gufengHintComp;
+const GUFENG_HINT_CHANCE=CONFIG.gufengHintChance;
+const GUFENG_LUCKY_LUCK=CONFIG.gufengLuckyLuck;
+const GUFENG_LUCKY_CHANCE=CONFIG.gufengLuckyChance;
 const NEWBIE_PHASES=[
   {reports:0,interval:30*1000},{reports:3,interval:60*1000},
   {reports:10,interval:3*60*1000},{reports:30,interval:8*60*1000},
@@ -146,14 +157,6 @@ const SIGN_IN_REWARDS=[
   {day:6,icon:'🪙',name:'×6',type:'stone',mul:6},
   {day:7,icon:'💎',name:'×11',type:'stone',mul:11}
 ];
-/* ============ 每日答题（凡间商道） ============ */
-const DAILY_QUIZ_COUNT = 3;                // 每天抽题数
-const QUIZ_REWARD_MULT = {                 // 正确率 → 奖励系数
-  3: 0.8,
-  2: 0.5,
-  1: 0.2,
-  0: 0.05
-};
 
 /* ============ 14 亿里程碑 ============ */
 const MILESTONES=[
@@ -804,66 +807,6 @@ function buildDynamicEvent(tpl,top){
     return{id:tpl.id,title:tpl.title,ask:b.ask,choices:aff,chainId:tpl.chainId||null,chainStep:tpl.chainStep||0};
   }catch(e){return null}
 }
-function pickEvent(){
-  const top=topDisciple();if(!top)return null;
-  s.reportsSinceEvent=(s.reportsSinceEvent||0)+1;
-const force=s.reportsSinceEvent>=CONFIG.eventForceInterval;
-if(!force&&s.reportsSinceEvent<CONFIG.eventMinInterval)return null;
-if(!force&&Math.random()>CONFIG.eventChance)return null;
-  s.reportsSinceEvent=0;
-  if(!s.eventChain)s.eventChain={};
-  // === 选定本次事件的主角弟子 ===
-  // 首席 60% 概率主导，其余由其他在宗门弟子分担
-  const others=s.discipleList.filter(d=>d.id!==top.id&&!isOnExpedition(d)&&!isInMijing(d));
-  let actor=top;
-  if(others.length>0&&Math.random()<0.4)actor=pick(others);
-  const lvl=actor.level;
-  // === 优先状态剧情：弟子身上有活跃状态时，50% 概率先抽状态剧情 ===
-  const _activeSt=getActiveStates(actor);
-  if(_activeSt.length>0&&Math.random()<0.5){
-    const matching=STATE_STORY_TEMPLATES.filter(t=>_activeSt.some(st=>st.id===t.stateType));
-    if(matching.length>0){
-      const st=weightedPick(matching,'weight');
-      const ev=buildDynamicEvent(st,actor);
-      if(ev){
-        ev.discipleId=actor.id;
-        ev.discipleName=actor.name;
-        ev.stateStory=true;
-        return ev;
-      }
-    }
-  }
-  const cands=EVENT_TEMPLATES.filter(e=>{
-    if(e.minLv&&lvl<e.minLv)return false;
-    // === 按性格过滤（模板未指定则不限） ===
-    if(e.personalities&&e.personalities.length>0&&!e.personalities.includes(actor.personality))return false;
-    // === 按专精过滤（模板未指定则不限） ===
-    if(e.specialties&&e.specialties.length>0&&!e.specialties.includes(actor.specialty))return false;
-    if(e.chainId){
-      const cur=s.eventChain[e.chainId]||0;
-      if(cur<e.chainStep-1)return false;
-      if(cur>=e.chainStep)return false;
-    }
-    return true;
-  });
-  if(cands.length===0)return null;
-  if(!s.recentEvents)s.recentEvents=[];
-  let pool=cands.filter(e=>!s.recentEvents.includes(e.id));
-  if(pool.length<2)pool=cands.slice();
-  const sh=shuffle(pool);
-  for(const t of sh){
-    const ev=buildDynamicEvent(t,actor);
-    if(ev){
-      // === 把主角弟子绑进事件里 ===
-      ev.discipleId=actor.id;
-      ev.discipleName=actor.name;
-      s.recentEvents.push(t.id);
-      if(s.recentEvents.length>5)s.recentEvents.shift();
-      return ev;
-    }
-  }
-  return null;
-}
 function _calcOutcomeWeights(choice,d){
   const p=d?getP(d):PERSONALITIES[0],root=d?getRoot(d):ROOTS[5];
   const w={great:10,good:40,ok:25,bad:20,awful:5};
@@ -1350,4 +1293,3108 @@ const QUIZ_BANK = [
   { question: '"个人所得税"的居民个人判定标准之一是？', options: ['有房', '在中国境内居住满 183 天', '有工作'], answer: 1, explain: '在中国境内居住满 183 天的个人为居民个人。' },
   { question: '"发票"在个税中的作用是？', options: ['无作用', '抵税', '部分扣除凭证'], answer: 2, explain: '发票是部分专项附加扣除和经营所得扣除的凭证。' },
   { question: '"偷税"与"节税"的本质区别是？', options: ['是否合法', '金额大小', '时间'], answer: 0, explain: '节税合法，偷税违法，本质区别在于是否遵守税法。' }
+];
+
+/* ============ 凡间见闻 · 古风理财问答题库 ============ */
+const GUFENG_QUIZ = [
+  // ===== 基础理财 =====
+  {
+    id: 'gq_001', cat: '基础理财', icon: '🧂', title: '集市遇盐商',
+    scene: '弟子{name}在集市遇见一位老盐商。老盐商叹气道：「老朽年轻时把全部身家押在一口盐井上，一朝塌方，半生积蓄化为乌有。小友，你说老朽当年错在哪了？」',
+    options: [
+      { text: '该多开几口井，别把身家押在一处', ok: true },
+      { text: '该押更大的本，一次赚够', ok: false },
+      { text: '该守着小本买卖，绝不冒险', ok: false }
+    ],
+    explain: '盐井要塌，盐路要断。把全部家当押到一处，不是胆子大，是拿命在赌。'
+  },
+  {
+    id: 'gq_002', cat: '基础理财', icon: '📦', title: '稳赚不赔',
+    scene: '弟子{name}在坊市遇到一位贩货商人。商人拍着胸脯说：「跟着我干，稳赚不赔！每月三分利，童叟无欺！」弟子回来问掌门：这话可信吗？',
+    options: [
+      { text: '可信，三分利不算高', ok: false },
+      { text: '有诈，高收益背后必有高风险', ok: true },
+      { text: '不太清楚', ok: false }
+    ],
+    explain: '三分月息，一年下来就是四成本金咯。天下哪有这种好事？利钱越高，坑越深。'
+  },
+  {
+    id: 'gq_003', cat: '基础理财', icon: '🪙', title: '利滚利',
+    scene: '弟子{name}在钱庄存了一百毛。掌柜说：「存一年，明年连本带息再存，第三年就多了。」弟子不明白：「这利息，也能生利息？」',
+    options: [
+      { text: '不能，利息只算本金', ok: false },
+      { text: '能，这就是"利滚利"，时间越长越可观', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '利钱也要生利钱，这就是利滚利。时间拖得越长，滚起来越凶。'
+  },
+  {
+    id: 'gq_004', cat: '基础理财', icon: '🌾', title: '米价',
+    scene: '弟子{name}返乡探亲，回来后说：「村里米价涨了。三年前一斗米二十文，现在要三十文了。爹娘攒的那些铜板，还是那么些，却买不到从前那么多米了。」弟子问：这是为什么？',
+    options: [
+      { text: '米商黑心', ok: false },
+      { text: '钱变"少"了——同样的钱买不到同样多的东西', ok: true },
+      { text: '是好事，说明村子富了', ok: false }
+    ],
+    explain: '钱还是那些钱，货还是那些货，就是钱不值钱咯。这就叫通货膨胀。攒死钱，不如攒能生钱的东西。'
+  },
+  {
+    id: 'gq_005', cat: '基础理财', icon: '🏦', title: '哪个合算',
+    scene: '弟子{name}在钱庄看到两种存法：甲，三个月，三分利；乙，一年，一毛利。掌柜说两种都差不多，可弟子怎么觉得不对劲？',
+    options: [
+      { text: '甲合算，三个月就三分', ok: false },
+      { text: '乙合算，一年一毛', ok: false },
+      { text: '要算"年化"，不能只看眼前', ok: true }
+    ],
+    explain: '三个月三分利，折成一年就是十二分。年化就是把不同期限的放到一起比，看哪个划得来。'
+  },
+  {
+    id: 'gq_006', cat: '基础理财', icon: '📜', title: '老账房的劝',
+    scene: '弟子{name}想借宗门一笔毛，去搏一桩买卖。管账的老账房拦住他：「小友，你今年二十出头，没家没业，一人吃饱全家不饿，拼一把也无妨。可隔壁那位，有老母要养，有幼弟要顾，他若也这么搏，就是拿一家人的命在赌。」',
+    options: [
+      { text: '老账房偏心', ok: false },
+      { text: '每个人的风险承受能力不一样——要看年龄、家底、负担', ok: true },
+      { text: '借给谁都是赌', ok: false }
+    ],
+    explain: '敢不敢搏，不只看胆子大不大，还要看你后头站到好多人。'
+  },
+  {
+    id: 'gq_007', cat: '基础理财', icon: '💡', title: '什么是理财',
+    scene: '弟子{name}问：「掌门，弟子听说山下富户都讲究『理财』。是不是把钱都拿去搏一桩大的，一夜翻身？」',
+    options: [
+      { text: '对，搏一把大的', ok: false },
+      { text: '不是，理财是让资产慢慢保值增值', ok: true },
+      { text: '是把钱锁在箱子里', ok: false }
+    ],
+    explain: '理财不是赌博，是让钱在把稳的风险里头，慢慢长大。'
+  },
+  {
+    id: 'gq_008', cat: '基础理财', icon: '🏜️', title: '荒年',
+    scene: '弟子{name}游历时遇到荒年，见一户人家有百亩良田，却拿不出买米的现钱。地里长的还没收，仓里存的都是谷，一家人饿了两天。',
+    options: [
+      { text: '太穷', ok: false },
+      { text: '田和谷难变现，不如手里有现钱', ok: true },
+      { text: '时运不好', ok: false }
+    ],
+    explain: '田和谷算家当，但不能马上换成饭。这叫流动性差。手头留点现钱，才遭得住突发的关口。'
+  },
+  {
+    id: 'gq_009', cat: '基础理财', icon: '📜', title: '家书',
+    scene: '弟子{name}收到家书，说爹病重，要一大笔诊金。弟子平日里的毛都拿去搏买卖、买丹药，手里没剩多少。一时慌了神。弟子问：平日里留多少，才不至于被这种事逼到墙角？',
+    options: [
+      { text: '一分不留，全拿去博', ok: false },
+      { text: '留三到六个月的用度', ok: true },
+      { text: '留十年用度才安心', ok: false }
+    ],
+    explain: '三到六个月的用度，是留给意外的。失业、生病、出变故——这些事不跟你打招呼，来了就要钱。'
+  },
+  {
+    id: 'gq_010', cat: '基础理财', icon: '🧾', title: '糊涂账',
+    scene: '弟子{name}被派去管宗门采买，一个月下来，账上少了一笔毛。弟子想不起花在哪了，很自责。弟子问：怎么才能不糊涂？',
+    options: [
+      { text: '不要管账', ok: false },
+      { text: '把每一笔进出都记下来', ok: true },
+      { text: '多找几个人一起管', ok: false }
+    ],
+    explain: '记账不是为了抠门，是为了晓得钱跑哪去了。糊涂账里头，既藏到浪费，也藏到漏洞。'
+  },
+
+  // ===== 银行存款 =====
+  {
+    id: 'gq_011', cat: '银行存款', icon: '🏦', title: '钱庄也会倒',
+    scene: '弟子{name}在钱庄存了三百毛，回来听说：「钱庄也会倒！当年城东那家，一夜之间人都跑了。」弟子慌了：那弟子的毛怎么办？',
+    options: [
+      { text: '全无保障，只能自认倒霉', ok: false },
+      { text: '朝廷有规矩，一家钱庄里存的钱，最多保到五十万毛', ok: true },
+      { text: '只要钱庄大，就没事', ok: false }
+    ],
+    explain: '朝廷有规矩：一家钱庄存的钱，五十万毛以内全保。超出的另算。莫把鸡蛋全放到一家钱庄。'
+  },
+  {
+    id: 'gq_012', cat: '银行存款', icon: '💰', title: '存法',
+    scene: '弟子{name}想存三百毛到钱庄。掌柜说：「活期随取，定期要等。可定期的利钱，是活期的好几倍。」弟子问：该选哪种？',
+    options: [
+      { text: '活期，随时能取最方便', ok: false },
+      { text: '定期，利钱更多', ok: false },
+      { text: '看情况——常用的留活期，不动的存定期', ok: true }
+    ],
+    explain: '全存活期，亏利钱；全存定期，急用钱的时候反而吃亏。各有各的用处。'
+  },
+  {
+    id: 'gq_013', cat: '银行存款', icon: '📜', title: '大额存单',
+    scene: '弟子{name}路过钱庄，听见掌柜对一位大主顾说：「您这一千毛存个『大额单子』，利钱比寻常定期还多那么一点。」弟子回来问：为什么大主顾的利钱更多？',
+    options: [
+      { text: '大主顾运气好', ok: false },
+      { text: '因为他存得多、存得久，钱庄愿意给更多利钱', ok: true },
+      { text: '因为钱庄喜欢他', ok: false }
+    ],
+    explain: '钱庄也是做生意。你存得越多越稳当，钱庄能拿去做的事就越多，自然愿意多分你点。'
+  },
+  {
+    id: 'gq_014', cat: '银行存款', icon: '🔮', title: '高息存法',
+    scene: '弟子{name}遇到一位道人，道人说：「我这存法，保本，却比寻常存法多两三倍利钱。只是——利钱多少，要看老天爷给不给面子。」',
+    options: [
+      { text: '完全不靠谱', ok: false },
+      { text: '这种"保本，但收益看天"的存法，叫结构性存款', ok: true },
+      { text: '是骗局', ok: false }
+    ],
+    explain: '本钱大体保得住，利钱要看某个事情给不给面子。不是骗人的，但也莫指望好高的利钱。'
+  },
+  {
+    id: 'gq_015', cat: '银行存款', icon: '🏦', title: '钱庄的话变了',
+    scene: '弟子{name}发现钱庄的告示变了。从前写：「存本保息，童叟无欺。」现在写：「本钱有险，盈亏自负。」弟子问：钱庄是不是要倒了？',
+    options: [
+      { text: '是，钱庄要倒了', ok: false },
+      { text: '不是，朝廷立了新规：钱庄卖的"理财"不再保本保收益', ok: true },
+      { text: '是钱庄掌柜偷懒', ok: false }
+    ],
+    explain: '从前朝廷护到钱庄，亏了也要赔你。现在规矩变了。存存款才有保障，买理财就莫得咯。'
+  },
+  {
+    id: 'gq_016', cat: '银行存款', icon: '⏰', title: '急用',
+    scene: '弟子{name}去年存了三百毛定期，一年利钱一毛五。可这几天他爹病了，急着用钱。弟子去取，钱庄掌柜说：「提前取，按活期算——利钱只有三分。」',
+    options: [
+      { text: '钱庄耍赖', ok: false },
+      { text: '定期的规矩就是这样：提前取，按活期算', ok: true },
+      { text: '应该闹一闹', ok: false }
+    ],
+    explain: '存之前要想清楚——这笔钱，一年内用不用得上。一部分定期，一部分活期，比全押定期把稳。'
+  },
+
+  // ===== 宏观 =====
+  {
+    id: 'gq_017', cat: '宏观', icon: '📯', title: '朝中的风吹',
+    scene: '弟子{name}在市集听到消息：朝廷下令，各钱庄每收一百毛，要留二十毛在库里，不准放贷。街上钱一下子紧了。',
+    options: [
+      { text: '没影响，只是钱庄的事', ok: false },
+      { text: '钱庄能放的钱少了，市面上的钱变紧，借贷变贵', ok: true },
+      { text: '好事，说明朝廷要发钱', ok: false }
+    ],
+    explain: '这个比例一提，市面上能流动的钱就少，借钱的利钱就贵——离我们远，也会绕到我们身上来。'
+  },
+  {
+    id: 'gq_018', cat: '宏观', icon: '🏠', title: '买房',
+    scene: '弟子{name}想在山下买一宅子，成家立业。跑去钱庄问，掌柜说：「按 LPR 算，加二十个点。」弟子听不懂，回来问掌门。',
+    options: [
+      { text: '朝廷定的固定利率', ok: false },
+      { text: '钱庄报出来的"贷款市场报价利率"', ok: true },
+      { text: '钱庄名字', ok: false }
+    ],
+    explain: 'LPR 是十八家钱庄每个月报一次价，掐头去尾取中间。你借钱的利钱，多半就挂到这上头。'
+  },
+
+  // ===== 债券 =====
+  {
+    id: 'gq_019', cat: '债券', icon: '🤝', title: '借不借',
+    scene: '隔壁村闹水患，村正来借钱修堤，说「三年后连本带息还你，年息一分。」弟子{name}问：这算不算一桩买卖？',
+    options: [
+      { text: '是买卖，但要注意：借钱给谁、他还不还得上', ok: true },
+      { text: '不是买卖，是施舍', ok: false },
+      { text: '是买卖，稳赚不赔', ok: false }
+    ],
+    explain: '借钱给村里，就是买了一张债券。看债看两样：借给哪个，还不还得上。村正讲信用、三年能还，就是好债；要是赖账的村，利钱再高也要躲。'
+  },
+
+  // ===== 股票 =====
+  {
+    id: 'gq_020', cat: '股票', icon: '🏪', title: '值不值',
+    scene: '弟子{name}想盘下山下一间铺子。掌柜开价五百毛，铺子一年能赚五十毛。弟子算：十年回本。可隔壁另一间铺子，开价三百毛，一年也赚五十毛。弟子问：哪间更值？',
+    options: [
+      { text: '一样的', ok: false },
+      { text: '按"几年回本"算——两年回本的比十年回本的更值', ok: true },
+      { text: '看铺子大小', ok: false }
+    ],
+    explain: '价钱除以年利润，就是几年回本，行话叫市盈率。一样的利润，价钱越低越划得来。'
+  },
+
+  // ===== 股票 =====
+  {
+    id: 'gq_021', cat: '股票', icon: '📈', title: '红绿柱子',
+    scene: '弟子{name}下山办事，看到一堵墙上画满了红绿柱子，问掌门：「那些人盯到墙上的红绿柱子，一会儿笑一会儿哭，那是个啥子东西？」',
+    options: [
+      { text: '是朝廷的布告', ok: false },
+      { text: '是股价涨跌的图，红柱表示涨，绿柱表示跌', ok: true },
+      { text: '是商号的账本', ok: false }
+    ],
+    explain: '那叫 K 线。红柱是收得比开得多，绿柱是收得比开得少。看多了就晓得，红绿都是寻常事。'
+  },
+  {
+    id: 'gq_022', cat: '股票', icon: '📉', title: '涨停板',
+    scene: '弟子{name}从坊市回来，兴冲冲地说：「掌门！弟子买的那只票今天『涨停』了！听人说，一天就赚了一成！」',
+    options: [
+      { text: '厉害，明天再买点', ok: false },
+      { text: '涨停是涨到当天上限，想卖也未必卖得脱', ok: true },
+      { text: '涨停就是永远不跌', ok: false }
+    ],
+    explain: '主板一天最多涨一成，涨到顶就动不了咯。买的人多，卖的人少，你想卖都排不上队。'
+  },
+  {
+    id: 'gq_023', cat: '股票', icon: '💰', title: '股息',
+    scene: '弟子{name}听说山下有家老字号，每年都给股东分红利，问掌门：「这是不是比存钱庄划得来？」',
+    options: [
+      { text: '分红就一定划得来', ok: false },
+      { text: '要看股息率——一年分红除以股价', ok: true },
+      { text: '分不分红跟股价莫得关系', ok: false }
+    ],
+    explain: '分红是好事，但要看跟股价比划不划得来。一年分红除以股价，就是股息率。'
+  },
+  {
+    id: 'gq_024', cat: '股票', icon: '💸', title: '除息',
+    scene: '弟子{name}持有的票分了红，可他第二天一看，股价跌了一截。弟子慌了：「是不是被人骗了？」',
+    options: [
+      { text: '是被骗了', ok: false },
+      { text: '是除息——分红之后股价要相应下调，总资产没变', ok: true },
+      { text: '是庄家在操纵', ok: false }
+    ],
+    explain: '分了红，股价就要扣掉分红那部分，这叫除息。你拿到手的钱加股价，跟原来一样。'
+  },
+  {
+    id: 'gq_025', cat: '股票', icon: '🐴', title: '白马与黑马',
+    scene: '弟子{name}在坊市听人摆龙门阵，有人说买「白马股」稳，有人说要抓「黑马股」才赚。弟子回来问掌门：「白马黑马，到底是啥子？」',
+    options: [
+      { text: '白马是外国的马', ok: false },
+      { text: '白马是业绩稳的大公司，黑马是突然爆发的', ok: true },
+      { text: '白马是白色的马', ok: false }
+    ],
+    explain: '白马股是那些名声好、业绩稳的。黑马股是原先不起眼，突然发力的。各有各的赌法。'
+  },
+
+  // ===== 基金 =====
+  {
+    id: 'gq_026', cat: '基金', icon: '🪙', title: '聚沙成塔',
+    scene: '弟子{name}听说有个法子，把一百个人的小钱凑起来，交给一个懂行的人去打理，赚了一人分一点。弟子问：「这靠不靠得住？」',
+    options: [
+      { text: '靠不住，钱交给别个不放心', ok: false },
+      { text: '这就是基金——大家凑钱，专人打理，风险共担', ok: true },
+      { text: '是骗局', ok: false }
+    ],
+    explain: '把钱凑起来交给懂行的人，就是基金。好处是分散，坏处是管理的人不一定靠谱。'
+  },
+  {
+    id: 'gq_027', cat: '基金', icon: '📊', title: '跟到大盘走',
+    scene: '弟子{name}问：「有没有那种不用动脑筋，跟到大盘一起走就行的法子？」',
+    options: [
+      { text: '莫得，天下没有这种事', ok: false },
+      { text: '有，指数基金——跟着某个指数走，不用挑个股', ok: true },
+      { text: '有，但要天天盯盘', ok: false }
+    ],
+    explain: '指数基金就是跟到某个榜走。榜上有的它都买点，榜变它也变。适合不想操心的人。'
+  },
+  {
+    id: 'gq_028', cat: '基金', icon: '🔄', title: '定投',
+    scene: '弟子{name}说：「弟子每个月存一点毛，固定买同一只基金，不管涨跌都买，掌门觉得咋样？」',
+    options: [
+      { text: '要等跌了再买', ok: false },
+      { text: '定投能摊平成本，不用择时，适合长期', ok: true },
+      { text: '是傻办法', ok: false }
+    ],
+    explain: '定投就是不管涨跌都买。贵的买得少，便宜的买得多，日子久了成本就平了。'
+  },
+  {
+    id: 'gq_029', cat: '基金', icon: '📜', title: '申购费',
+    scene: '弟子{name}买了一只基金，发现还没赚就先扣了一笔钱，问：「这是不是被人骗了？」',
+    options: [
+      { text: '是被骗了', ok: false },
+      { text: '是申购费，买基金本来就要收手续费', ok: true },
+      { text: '是基金公司偷钱', ok: false }
+    ],
+    explain: '买基金要收申购费，卖要收赎回费。持得越短，赎回费越贵。'
+  },
+
+  // ===== 债券 =====
+  {
+    id: 'gq_030', cat: '债券', icon: '🏛️', title: '朝廷借条',
+    scene: '弟子{name}在市集听说朝廷发了一批「借条」，说好三年后连本带利还。弟子问：「朝廷也要借钱？」',
+    options: [
+      { text: '朝廷借钱肯定赖账', ok: false },
+      { text: '这叫国债，朝廷发的债，是最把稳的一种', ok: true },
+      { text: '是谣言', ok: false }
+    ],
+    explain: '朝廷发的借条就是国债。一个国家的信用撑着，比哪个商号的借条都把稳。'
+  },
+  {
+    id: 'gq_031', cat: '债券', icon: '🔄', title: '可转可换',
+    scene: '弟子{name}听说有一种债，到期不光能拿回本钱，还能换成那家商号的股。弟子觉得很划算，回来问掌门。',
+    options: [
+      { text: '天下哪有这种好事', ok: false },
+      { text: '这叫可转债，兼有债和股的性子', ok: true },
+      { text: '那是骗人的', ok: false }
+    ],
+    explain: '可转债就是债，但到了时候能换成股。涨了换股，跌了拿本钱，两头都沾点边。'
+  },
+  {
+    id: 'gq_032', cat: '债券', icon: '⚖️', title: '利钱一涨债就跌',
+    scene: '弟子{name}手里有一张债，本想把稳，结果市面上的利钱一涨，他手里的债反而不值钱了。弟子不解。',
+    options: [
+      { text: '是有人操纵', ok: false },
+      { text: '利钱涨了，老债就不吃香了，价钱自然跌', ok: true },
+      { text: '是弟子运气不好', ok: false }
+    ],
+    explain: '市面上利钱一涨，新债利钱高，老债就没人要咯，价钱就要跌。这是老规矩。'
+  },
+
+  // ===== 保险 =====
+  {
+    id: 'gq_033', cat: '保险', icon: '💊', title: '给身子留条后路',
+    scene: '弟子{name}游历时见一户人家，主人生了重病，一家老小砸锅卖铁。弟子回来问：「有没有啥子法子，能防这种事？」',
+    options: [
+      { text: '多存钱就行了', ok: false },
+      { text: '买重疾险——生了大病，一次赔一笔钱', ok: true },
+      { text: '无解', ok: false }
+    ],
+    explain: '重疾险是那种，生了大病一次性赔你一笔钱。治病、养家、还债，想咋个用就咋个用。'
+  },
+  {
+    id: 'gq_034', cat: '保险', icon: '🏥', title: '看病报销',
+    scene: '弟子{name}问：「听说有种法子，生病住院花的钱，能按实报销？」',
+    options: [
+      { text: '莫得这种事', ok: false },
+      { text: '有，医疗险，按实际花费报销', ok: true },
+      { text: '是骗子', ok: false }
+    ],
+    explain: '医疗险是按实际花的钱来报，花了好多报好多，不会多赔。'
+  },
+  {
+    id: 'gq_035', cat: '保险', icon: '⏳', title: '后悔的期限',
+    scene: '弟子{name}替宗门买了份保险，回来觉得不划算，问掌门能不能退。',
+    options: [
+      { text: '买了就退不脱咯', ok: false },
+      { text: '有犹豫期，十来天内可以全退', ok: true },
+      { text: '退了要赔一大笔', ok: false }
+    ],
+    explain: '买保险有犹豫期，十来天内反悔可以全退。过了这个村就没这个店咯。'
+  },
+
+  // ===== 房产税务 =====
+  {
+    id: 'gq_036', cat: '房产税务', icon: '🏠', title: '契税',
+    scene: '弟子{name}在山下买了一处宅子，去衙门办手续时被收了一笔钱。弟子问：「这是啥子钱？」',
+    options: [
+      { text: '是衙门乱收费', ok: false },
+      { text: '是契税，买房要交的税，由买方出', ok: true },
+      { text: '是中介费', ok: false }
+    ],
+    explain: '买房要交契税，这笔钱是买方出，不是卖方。各地税率不一样，要问清楚。'
+  },
+  {
+    id: 'gq_037', cat: '房产税务', icon: '🏦', title: '还贷两种还法',
+    scene: '弟子{name}想借钱庄的钱买房，掌柜问他要选哪种还法：「一种每月还一样多，一种越还越少。」弟子拿不定主意。',
+    options: [
+      { text: '选每月还一样的，省心', ok: false },
+      { text: '两种各有各的好处——等额本息前期压力小，等额本金总利钱少', ok: true },
+      { text: '看掌柜喜欢哪种', ok: false }
+    ],
+    explain: '每月还一样多的叫等额本息，前期轻松。越还越少的叫等额本金，总利钱少，但开头要拿得出。'
+  },
+
+  // ===== 反诈 =====
+  {
+    id: 'gq_038', cat: '反诈', icon: '💔', title: '杀猪盘',
+    scene: '弟子{name}遇到一位嘴甜的人，天天嘘寒问暖，说带他去一个稳赚的买卖。弟子有点心动，回来问掌门。',
+    options: [
+      { text: '是好人，可以信', ok: false },
+      { text: '这是杀猪盘——先跟你处感情，再引你去投资', ok: true },
+      { text: '试试也无妨', ok: false }
+    ],
+    explain: '先哄你开心，再引你去投钱，钱一进去就出不来了。这是杀猪盘，莫信。'
+  },
+  {
+    id: 'gq_039', cat: '反诈', icon: '📞', title: '冒充公门',
+    scene: '弟子{name}接到一通电话，对方说自己是衙门的人，说弟子犯了事，要把钱转到「安全账户」去。弟子慌了。',
+    options: [
+      { text: '赶紧转，别惹事', ok: false },
+      { text: '是骗子——衙门不会打电话叫你转钱', ok: true },
+      { text: '先转一半试试', ok: false }
+    ],
+    explain: '衙门办案不会打电话，更不会叫你转钱到啥子安全账户。接到这种电话，直接挂。'
+  },
+  {
+    id: 'gq_040', cat: '反诈', icon: '🛒', title: '刷单返利',
+    scene: '弟子{name}看到一个告示，说帮人刷单就能拿返利，第一单还真的返了钱。弟子心动，想加大投入。',
+    options: [
+      { text: '加大投入，赚得更多', ok: false },
+      { text: '是诈骗——先给甜头，等你投大了就卷款跑', ok: true },
+      { text: '可以试试小额的', ok: false }
+    ],
+    explain: '先让你尝点甜头，等你投大的时候，人早就跑咯。这是老套路。'
+  },
+  {
+    id: 'gq_041', cat: '反诈', icon: '🪙', title: '高息理财',
+    scene: '弟子{name}听说一个买卖，「投一百，一年变两百」，稳赚。弟子来问掌门要不要投。',
+    options: [
+      { text: '投，机会难得', ok: false },
+      { text: '一年翻倍的，十有八九是骗局', ok: true },
+      { text: '投一点点试试', ok: false }
+    ],
+    explain: '一年翻倍，天下哪有这种好事。利钱高得离谱的，十有八九是骗人的。'
+  },
+
+  // ===== 宏观 =====
+  {
+    id: 'gq_042', cat: '宏观', icon: '🥬', title: '物价涨了',
+    scene: '弟子{name}从山下回来，抱怨菜价涨了：「去年一文钱两把菜，现在一文钱一把了。」问掌门这是啥子原因。',
+    options: [
+      { text: '菜农黑心', ok: false },
+      { text: '这就是通胀，钱没变少，是钱不值钱了', ok: true },
+      { text: '是天气不好', ok: false }
+    ],
+    explain: '菜价涨、米价涨、啥子都在涨，这就是通货膨胀。钱还在，就是不值钱咯。'
+  },
+  {
+    id: 'gq_043', cat: '宏观', icon: '📊', title: '一国一年',
+    scene: '弟子{name}问：「掌门，弟子听说朝廷每年都要算一个数，说一国一年一共做了好多买卖，那个叫啥子？」',
+    options: [
+      { text: '叫国库', ok: false },
+      { text: '叫 GDP——一国一年内产出的全部东西的价值', ok: true },
+      { text: '叫税收', ok: false }
+    ],
+    explain: 'GDP 就是一国一年里头，做出来的东西加起来的价值。数字越大，说明买卖越兴旺。'
+  },
+  {
+    id: 'gq_044', cat: '宏观', icon: '📈', title: '加息',
+    scene: '弟子{name}听说朝廷要「加息」，问掌门这是好事还是坏事。',
+    options: [
+      { text: '一定是好事', ok: false },
+      { text: '存钱吃利的人欢喜，借钱的和股债要吃亏', ok: true },
+      { text: '跟我们莫得关系', ok: false }
+    ],
+    explain: '利钱一涨，存钱的安逸，借钱的头疼。股和债多半要跌，做买卖的也难过。'
+  },
+
+  // ===== 投资心理 =====
+  {
+    id: 'gq_045', cat: '投资心理', icon: '📉', title: '追涨杀跌',
+    scene: '弟子{name}看别人买啥子就买啥子，涨了追进去，跌了赶紧跑。忙了一年，反而亏了。弟子想不通。',
+    options: [
+      { text: '运气不好', ok: false },
+      { text: '这是追涨杀跌——典型的亏钱法子', ok: true },
+      { text: '市场不好', ok: false }
+    ],
+    explain: '涨了追，跌了跑，多半是买高卖低。稳得住的人才赚得到钱。'
+  },
+  {
+    id: 'gq_046', cat: '投资心理', icon: '🐑', title: '跟到大家走',
+    scene: '弟子{name}看大家买啥子就跟着买，说：「大家都买的，肯定莫得错。」',
+    options: [
+      { text: '有道理', ok: false },
+      { text: '这叫羊群效应——大家错的时候一起错', ok: true },
+      { text: '人多就稳当', ok: false }
+    ],
+    explain: '大家都买不一定对。人多的地方往往贵，等你跟进去，就成了接盘的那个。'
+  },
+  {
+    id: 'gq_047', cat: '投资心理', icon: '😖', title: '输了心头难受',
+    scene: '弟子{name}买的东西跌了一成，难受得睡不着。掌门问他为啥子，他说：「跌一成的难受，比涨两成的欢喜还厉害。」',
+    options: [
+      { text: '弟子心态不好', ok: false },
+      { text: '这是人性——亏的痛比赚的喜要强', ok: true },
+      { text: '弟子太贪', ok: false }
+    ],
+    explain: '人都一样，亏一块的痛，要赚两块才补得回来。这叫损失厌恶，晓得就好。'
+  },
+
+  // ===== 生活理财 =====
+  {
+    id: 'gq_048', cat: '生活理财', icon: '💳', title: '先花后还',
+    scene: '弟子{name}拿到一张「先花后还」的凭证，说这个月花下个月还。弟子觉得好用，想多花点。',
+    options: [
+      { text: '随便花，下个月还就行', ok: false },
+      { text: '要小心——花起的时候不心疼，还的时候才晓得痛', ok: true },
+      { text: '莫得关系', ok: false }
+    ],
+    explain: '先花后还，花的时候不心疼，还的时候才晓得。用多了就成了无底洞。'
+  },
+  {
+    id: 'gq_049', cat: '生活理财', icon: '📋', title: '信用',
+    scene: '弟子{name}想借钱庄的钱，掌柜查了查，摇头说：「你名字底下莫得信用。」弟子不懂。',
+    options: [
+      { text: '是掌柜看不起他', ok: false },
+      { text: '是征信——借过钱、还过钱，才攒得起信用', ok: true },
+      { text: '是家底不够', ok: false }
+    ],
+    explain: '朝廷有个册子，记到你借钱还钱的事。借了按时还，就攒得起信用；赖了账，以后借钱就难咯。'
+  },
+  {
+    id: 'gq_050', cat: '生活理财', icon: '⚠️', title: '借来的钱不能乱用',
+    scene: '弟子{name}听说有一种「消费贷」，借来的钱能拿去买房买股。弟子问掌门这样行不行。',
+    options: [
+      { text: '行，只要能赚', ok: false },
+      { text: '不行——消费贷只能用来消费，挪去买房炒股是违规的', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '消费贷就是叫你去花钱的，不能挪去买房炒股。查到了要收回，还要吃罚。'
+  },
+
+  // ===== 股票（续）=====
+  {
+    id: 'gq_051', cat: '股票', icon: '📊', title: '换手',
+    scene: '弟子{name}从坊市回来，一脸稀奇：「掌门，弟子看那墙上有个数，一会儿大一会儿小，叫啥子『换手』，是啥子意思嘛？」',
+    options: [
+      { text: '是换庄家的手', ok: false },
+      { text: '是成交量和流通股数的比，代表买卖活不活跃', ok: true },
+      { text: '是排队的人', ok: false }
+    ],
+    explain: '换手就是这一天成交的股，占全部能买卖的股的好多。换手高，说明买卖旺；低，就冷清。'
+  },
+  {
+    id: 'gq_052', cat: '股票', icon: '⏰', title: 'T+1',
+    scene: '弟子{name}买了一只票，第二天想卖，发现卖不脱。弟子急了，跑来问：「是不是被人锁死了？」',
+    options: [
+      { text: '是被人锁死了', ok: false },
+      { text: '是规矩——今天买的，明天才能卖', ok: true },
+      { text: '要三天后才能卖', ok: false }
+    ],
+    explain: '这是 T+1 的规矩。今天买的，明天才准卖。防的就是当天来回倒腾。'
+  },
+  {
+    id: 'gq_053', cat: '股票', icon: '💰', title: '一手是好多',
+    scene: '弟子{name}想去买票，回来问：「掌门，人家说一手一百股，弟子只能凑够五十股，能不能买半手？」',
+    options: [
+      { text: '可以买半手', ok: false },
+      { text: '不行，最少一手一百股，除非是科创板', ok: true },
+      { text: '看行情', ok: false }
+    ],
+    explain: '一般一手是一百股，最少买一手。科创板例外，可以一股一股买。'
+  },
+  {
+    id: 'gq_054', cat: '股票', icon: '📜', title: '招股书',
+    scene: '弟子{name}拿到一本厚厚的册子，说是一家商号要「上市」，招人入股。弟子看不懂，来问掌门。',
+    options: [
+      { text: '扔了，莫得用', ok: false },
+      { text: '这是招股书，要仔细看——里头写了商号的底细', ok: true },
+      { text: '是广告', ok: false }
+    ],
+    explain: '招股书是商号上市前交底的册子。里头写了家底、做啥子、赚好多。买之前要看。'
+  },
+  {
+    id: 'gq_055', cat: '股票', icon: '🚪', title: '停牌',
+    scene: '弟子{name}手里的票突然买不脱也卖不脱了，急得团团转。跑来问掌门是不是出了啥子事。',
+    options: [
+      { text: '商号跑路了', ok: false },
+      { text: '是停牌——有大事，先停一停，等查清楚再开', ok: true },
+      { text: '被官府封了', ok: false }
+    ],
+    explain: '停牌是有大事，比如要重组、核查，先停一停。等事情清楚了，再开市。'
+  },
+  {
+    id: 'gq_056', cat: '股票', icon: '📉', title: '跌停',
+    scene: '弟子{name}买的一只票连着跌停三天，急得吃不下饭。问掌门：「是不是永远出不来了？」',
+    options: [
+      { text: '永远出不来了', ok: false },
+      { text: '跌停是跌到当天上限，不是出不来，是想卖的人多', ok: true },
+      { text: '是骗局', ok: false }
+    ],
+    explain: '跌停是跌到当天不能再跌。想卖的人多，排队也未必卖得脱。但过了这天，又能动咯。'
+  },
+  {
+    id: 'gq_057', cat: '股票', icon: '📖', title: '沪深',
+    scene: '弟子{name}听人说要去「沪深」买票，回来问掌门沪深在哪儿，要走几天路。',
+    options: [
+      { text: '走三天', ok: false },
+      { text: '沪深是两处交易所，一南一北，不用走路，是买卖的场子', ok: true },
+      { text: '是两个人的名字', ok: false }
+    ],
+    explain: '沪深是两处交易所：一处在上海，一处在深圳。全国的票都在那里头买卖。'
+  },
+  {
+    id: 'gq_058', cat: '股票', icon: '🛡️', title: '蓝筹',
+    scene: '弟子{name}听人说买「蓝筹股」稳当，回来问掌门：「啥子是蓝筹？是不是蓝色的筹码？」',
+    options: [
+      { text: '是蓝色的筹码', ok: false },
+      { text: '是大商号、老字号的票，业绩稳、分红多', ok: true },
+      { text: '是官家的票', ok: false }
+    ],
+    explain: '蓝筹股是那些老字号、大商号。业绩稳当，分红也多，跌也跌不到哪儿去。'
+  },
+  {
+    id: 'gq_059', cat: '股票', icon: '📈', title: '均线',
+    scene: '弟子{name}盯着墙上的图，看到几根弯弯的线，问掌门那是啥子。',
+    options: [
+      { text: '是装饰', ok: false },
+      { text: '是均线——把前几天收盘价平均出来的线', ok: true },
+      { text: '是买卖的人数', ok: false }
+    ],
+    explain: '均线就是把前几天收的价平均一下，画成一根线。五天的、十天的、二十天的，各看各的。'
+  },
+  {
+    id: 'gq_060', cat: '股票', icon: '🔍', title: '内幕',
+    scene: '弟子{name}神秘兮兮地说：「掌门，弟子听人说明天有桩大事，提前买肯定赚。」',
+    options: [
+      { text: '赶紧去买', ok: false },
+      { text: '内幕交易是犯法的，莫沾', ok: true },
+      { text: '自己人听一嘴莫得关系', ok: false }
+    ],
+    explain: '内幕是犯法的。听一嘴也不行，查到了要罚，还要坐牢。莫为这点钱把自己搭进去。'
+  },
+
+  // ===== 基金（续）=====
+  {
+    id: 'gq_061', cat: '基金', icon: '💧', title: '余额宝',
+    scene: '弟子{name}把钱放进去一个地方，说随用随取，还有利钱。问掌门这是啥子。',
+    options: [
+      { text: '是钱庄', ok: false },
+      { text: '是货币基金——放短期的钱，稳当又活泛', ok: true },
+      { text: '是骗局', ok: false }
+    ],
+    explain: '货币基金就是买短期的票，稳当又能随时取。余额宝就是这一类。'
+  },
+  {
+    id: 'gq_062', cat: '基金', icon: '🌍', title: '出海',
+    scene: '弟子{name}说：「掌门，弟子听说有法子把毛拿去买海外的铺子，那个叫啥子？」',
+    options: [
+      { text: '叫走私', ok: false },
+      { text: '叫 QDII——拿境内的钱去买海外的票', ok: true },
+      { text: '叫外贸', ok: false }
+    ],
+    explain: 'QDII 就是拿境内的钱去买海外的票。好处是散得开，坏处是还要担汇率的风险。'
+  },
+  {
+    id: 'gq_063', cat: '基金', icon: '📦', title: '一篮子',
+    scene: '弟子{name}买了一只基金，问掌门：「这只基金里头装了些啥子？总不能啥都不晓得吧。」',
+    options: [
+      { text: '看运气', ok: false },
+      { text: '看持仓——基金每季度会公布买了啥', ok: true },
+      { text: '不公布', ok: false }
+    ],
+    explain: '基金每季度要公布买了啥子，叫持仓。不看的都是闭到眼睛买。'
+  },
+  {
+    id: 'gq_064', cat: '基金', icon: '💼', title: 'ETF',
+    scene: '弟子{name}听人说「ETF」，问掌门这是三个啥子字。',
+    options: [
+      { text: '三个商号名', ok: false },
+      { text: '是一种能在交易所买卖的指数基金', ok: true },
+      { text: '是一种债', ok: false }
+    ],
+    explain: 'ETF 就是能在交易所像票一样买卖的指数基金。买卖方便，费用也低。'
+  },
+  {
+    id: 'gq_065', cat: '基金', icon: '🎯', title: '净值和累计净值',
+    scene: '弟子{name}看到一只基金有两个价，一个叫净值，一个叫累计净值，搞不懂哪个算数。',
+    options: [
+      { text: '看净值就行了', ok: false },
+      { text: '净值是眼前价，累计净值算上了历史分红', ok: true },
+      { text: '看累计就行了', ok: false }
+    ],
+    explain: '净值是眼前的价。累计净值是把历年的分红加回去，看基金真实成绩的。'
+  },
+  {
+    id: 'gq_066', cat: '基金', icon: '📉', title: '最大回撤',
+    scene: '弟子{name}问：「掌门，弟子怎么晓得一只基金最惨的时候能跌好多？」',
+    options: [
+      { text: '没法晓得', ok: false },
+      { text: '看最大回撤——历史最高点跌到最低点的幅度', ok: true },
+      { text: '看当下的价', ok: false }
+    ],
+    explain: '最大回撤就是从最高点跌下来最多跌了好多。这个数越大，说明跌起来越狠。'
+  },
+  {
+    id: 'gq_067', cat: '基金', icon: '⚖️', title: '夏普',
+    scene: '弟子{name}听到一个词叫「夏普比率」，搞不懂，回来问掌门。',
+    options: [
+      { text: '是个人名', ok: false },
+      { text: '是衡量赚得划不划得来的数——赚得多、波动小的更优', ok: true },
+      { text: '是个商号', ok: false }
+    ],
+    explain: '夏普比率是看赚这么多钱，担了好大的波动。同样的赚，波动越小越划算。'
+  },
+  {
+    id: 'gq_068', cat: '基金', icon: '📜', title: '认申购费',
+    scene: '弟子{name}买基金时，看到「申购」「认购」两个词，问掌门有啥子区别。',
+    options: [
+      { text: '一样的', ok: false },
+      { text: '新发基金叫认购，老基金叫申购', ok: true },
+      { text: '认购更贵', ok: false }
+    ],
+    explain: '新发基金在募集的时候买叫认购。老基金平日买叫申购。'
+  },
+  {
+    id: 'gq_069', cat: '基金', icon: '🏦', title: '场内场外',
+    scene: '弟子{name}买基金，有人说去「场内」，有人说去「场外」，弟子懵了。',
+    options: [
+      { text: '一个在屋里，一个在屋外', ok: false },
+      { text: '场内是在交易所买，场外是在钱庄、票号买', ok: true },
+      { text: '两个是一回事', ok: false }
+    ],
+    explain: '场内是在交易所像票一样买卖，场外是找钱庄、票号买。各有各的方便。'
+  },
+  {
+    id: 'gq_070', cat: '基金', icon: '📊', title: '指数增强',
+    scene: '弟子{name}看到一只基金叫「指数增强」，问掌门啥子叫增强。',
+    options: [
+      { text: '是骗人的', ok: false },
+      { text: '是指数基金上加点主动操作，想跑赢指数', ok: true },
+      { text: '是指数翻倍', ok: false }
+    ],
+    explain: '指数增强就是跟到指数走，再自己动点手脚，想多赚点。搞得好赚得多，搞得撇就跑输。'
+  },
+
+  // ===== 保险（续）=====
+  {
+    id: 'gq_071', cat: '保险', icon: '⏳', title: '等待期',
+    scene: '弟子{name}刚买了一份保险，第二个月就病了，去要赔，人家说「还在等待期」。弟子不解。',
+    options: [
+      { text: '是人家耍赖', ok: false },
+      { text: '是等待期——刚买的一段时间里出险不赔', ok: true },
+      { text: '是弟子买错了', ok: false }
+    ],
+    explain: '刚买保险有一段时间叫等待期，这期间出险不赔。防的就是带病投保。'
+  },
+  {
+    id: 'gq_072', cat: '保险', icon: '📋', title: '如实告知',
+    scene: '弟子{name}替自己买保险，人家问他身子有没有啥子毛病，弟子觉得说了就买不成，想瞒到。',
+    options: [
+      { text: '瞒到，反正人家查不到', ok: false },
+      { text: '要如实说——瞒了以后赔的时候要吃亏', ok: true },
+      { text: '随便写', ok: false }
+    ],
+    explain: '买保险要如实说身子情况。瞒了以后出事，人家一查，可以拒赔，还退不到本钱。'
+  },
+  {
+    id: 'gq_073', cat: '保险', icon: '💰', title: '免赔额',
+    scene: '弟子{name}生病住院花了一笔，去要赔，人家说「先扣一万免赔额」。弟子搞不懂。',
+    options: [
+      { text: '是人家耍赖', ok: false },
+      { text: '免赔额是自己先担的部分，超过的才赔', ok: true },
+      { text: '是罚款', ok: false }
+    ],
+    explain: '免赔额是自己先担的。比如一万，你花了一万五，人家只赔五千。'
+  },
+  {
+    id: 'gq_074', cat: '保险', icon: '💀', title: '寿险',
+    scene: '弟子{name}问：「掌门，弟子听人说有一种险，自己走了以后才赔，那买来干啥子嘛？」',
+    options: [
+      { text: '莫得用', ok: false },
+      { text: '是寿险——留给家里人用的', ok: true },
+      { text: '是骗人的', ok: false }
+    ],
+    explain: '寿险是给自己走了以后赔的。是留给爹娘、婆娘、娃儿用的，自己是用不上的。'
+  },
+  {
+    id: 'gq_075', cat: '保险', icon: '🎁', title: '现金价值',
+    scene: '弟子{name}想退一份保险，人家说「按现金价值退」。弟子问这现金价值是啥子。',
+    options: [
+      { text: '就是赔的钱', ok: false },
+      { text: '是退保能拿回来的钱，前面几年多半比交的少', ok: true },
+      { text: '是分红', ok: false }
+    ],
+    explain: '现金价值就是退保能拿回的。前面几年交的钱扣了费用，多半比交的少。'
+  },
+  {
+    id: 'gq_076', cat: '保险', icon: '🚗', title: '意外',
+    scene: '弟子{name}问：「掌门，弟子听说有一种险，只赔意外，不赔病。那不赔病的，买来干啥子？」',
+    options: [
+      { text: '莫得用', ok: false },
+      { text: '意外险就是保意外——摔伤、车祸这些', ok: true },
+      { text: '是骗人的', ok: false }
+    ],
+    explain: '意外险就是保意外。摔了、撞了、烫了，这些是意外。生病不算。'
+  },
+  {
+    id: 'gq_077', cat: '保险', icon: '🧓', title: '年金',
+    scene: '弟子{name}问：「掌门，弟子听说有一种险，年轻的时候交钱，老了按月拿，那叫啥子？」',
+    options: [
+      { text: '叫养老金', ok: false },
+      { text: '叫年金险——到了年头按月给钱', ok: true },
+      { text: '叫存款', ok: false }
+    ],
+    explain: '年金险是年轻时候交钱，到了约定的年头，按月或按年给你。养老、养娃儿，都可以用。'
+  },
+  {
+    id: 'gq_078', cat: '保险', icon: '📱', title: '百万医疗',
+    scene: '弟子{name}听说有一种险，保额上百万，一年才几十毛。弟子觉得是骗子。',
+    options: [
+      { text: '肯定是骗子', ok: false },
+      { text: '是真有——叫百万医疗险，保额高、费用低，但有免赔额', ok: true },
+      { text: '保额是虚的', ok: false }
+    ],
+    explain: '百万医疗是真有的。保额上百万，一年几十毛，但有一万的免赔额。小病用不上，大病才管用。'
+  },
+
+  // ===== 反诈（续）=====
+  {
+    id: 'gq_079', cat: '反诈', icon: '📞', title: '领奖电话',
+    scene: '弟子{name}接到电话，说他在啥子比试里中了头奖，要先交一笔税费才能领。弟子心动。',
+    options: [
+      { text: '赶紧交', ok: false },
+      { text: '是诈骗——领奖哪有先交钱的', ok: true },
+      { text: '交一点点试试', ok: false }
+    ],
+    explain: '领奖哪有先交钱的道理。先交钱的，十有八九是骗人的。'
+  },
+  {
+    id: 'gq_080', cat: '反诈', icon: '💻', title: '退款短信',
+    scene: '弟子{name}收到一条短信，说他之前买的东西有问题，点链接可以退款。弟子手一滑就点了。',
+    options: [
+      { text: '没事，点就点了', ok: false },
+      { text: '危险——链接可能是钓鱼的，会偷走信息', ok: true },
+      { text: '是好事', ok: false }
+    ],
+    explain: '不明来路的链接莫点。点了可能要你输账号、密码、验证码。真正的退款走的是原路。'
+  },
+  {
+    id: 'gq_081', cat: '反诈', icon: '👮', title: '查案',
+    scene: '弟子{name}接到电话，说自己是衙门的，说弟子卷进了一桩大案，要配合查，把钱转到指定账户。',
+    options: [
+      { text: '赶紧转，配合衙门', ok: false },
+      { text: '是诈骗——衙门不会电话办案，更不会叫转钱', ok: true },
+      { text: '先转一半', ok: false }
+    ],
+    explain: '衙门办案要当面，不会打电话。更不会叫你转钱到啥子账户。接到这种电话，直接挂。'
+  },
+  {
+    id: 'gq_082', cat: '反诈', icon: '💳', title: '征信修复',
+    scene: '弟子{name}听说有人能花钱把征信上的黑点抹掉。弟子信以为真，来问掌门要不要花这笔钱。',
+    options: [
+      { text: '花钱抹掉', ok: false },
+      { text: '是骗局——征信上的记录，任何人都改不了', ok: true },
+      { text: '试试也无妨', ok: false }
+    ],
+    explain: '征信是朝廷的册子，谁都不能改。说是能花钱抹的，都是骗子。'
+  },
+  {
+    id: 'gq_083', cat: '反诈', icon: '🎣', title: '钓鱼',
+    scene: '弟子{name}收到一封信，说钱庄要升级，叫他点链接改密码。弟子差点就点了。',
+    options: [
+      { text: '点了没事', ok: false },
+      { text: '是钓鱼——钱庄不会发链接叫你改密码', ok: true },
+      { text: '小心点就行', ok: false }
+    ],
+    explain: '钱庄不会发链接叫你改密码。遇到这种信，先打官方电话问，莫点链接。'
+  },
+  {
+    id: 'gq_084', cat: '反诈', icon: '💸', title: '刷单',
+    scene: '弟子{name}在网上接到一单活：帮商号刷好评就给钱。开头真的给了几毛。后来人家叫他投一笔大钱，说刷得越多赚得越多。',
+    options: [
+      { text: '投大钱', ok: false },
+      { text: '是诈骗——刷单本身就违法，返利是诱饵', ok: true },
+      { text: '小投一点', ok: false }
+    ],
+    explain: '刷单本身就犯法，返利是钓你上钩的。等你投大了，人就跑咯。'
+  },
+  {
+    id: 'gq_085', cat: '反诈', icon: '🎭', title: 'AI 换脸',
+    scene: '弟子{name}接到师兄的视频，说急着用钱，叫他赶紧转。弟子觉得脸是师兄的脸，声音也对，差点就转了。',
+    options: [
+      { text: '转，师兄有难', ok: false },
+      { text: '小心——现在有换脸的骗术，要打电话核实', ok: true },
+      { text: '先转一半', ok: false }
+    ],
+    explain: '现在有换脸的邪术，脸和声音都能仿。真借钱，要打回电话亲口问。'
+  },
+  {
+    id: 'gq_086', cat: '反诈', icon: '📦', title: '注销校园贷',
+    scene: '弟子{name}接到电话，说他在外面借的校园贷不注销，以后要影响征信，要他把钱转到一个账户去「销账」。',
+    options: [
+      { text: '赶紧转', ok: false },
+      { text: '是诈骗——莫得这种销账的法子', ok: true },
+      { text: '先问问', ok: false }
+    ],
+    explain: '校园贷的销账走官方渠道，莫得打钱过去这一说。接到这种电话，直接挂。'
+  },
+
+  // ===== 宏观（续）=====
+  {
+    id: 'gq_087', cat: '宏观', icon: '🌊', title: '降准',
+    scene: '弟子{name}从坊市回来，说朝廷「降准」了，街上钱庄的人都笑。弟子问掌门这是啥子意思。',
+    options: [
+      { text: '是降低工资', ok: false },
+      { text: '是下调存款准备金率，钱庄能放的钱多了', ok: true },
+      { text: '是降利息', ok: false }
+    ],
+    explain: '降准是让钱庄多留一点钱去放贷。市面上的钱就多了，借钱也便宜些。'
+  },
+  {
+    id: 'gq_088', cat: '宏观', icon: '💰', title: 'M2',
+    scene: '弟子{name}听到一个词叫「M2」，问掌门这是啥子。',
+    options: [
+      { text: '是个人名', ok: false },
+      { text: '是广义货币——市面上一共有好多钱', ok: true },
+      { text: '是商号名', ok: false }
+    ],
+    explain: 'M2 就是市面上所有的钱加起来的数。这个数越大，说明钱越多。'
+  },
+  {
+    id: 'gq_089', cat: '宏观', icon: '📊', title: 'CPI',
+    scene: '弟子{name}听人说「CPI」，问掌门这是啥子。',
+    options: [
+      { text: '是个人名', ok: false },
+      { text: '是物价指数——看平时买的东西涨了好多', ok: true },
+      { text: '是税', ok: false }
+    ],
+    explain: 'CPI 就是把平时买的东西加起来，看比去年贵了好多。这个数一高，就说明通胀来了。'
+  },
+  {
+    id: 'gq_090', cat: '宏观', icon: '🌏', title: '顺差逆差',
+    scene: '弟子{name}听人摆龙门阵，说我们跟海外做买卖「顺差」。弟子问顺差是啥子。',
+    options: [
+      { text: '是走出去的多', ok: false },
+      { text: '是卖到海外的比从海外买的多', ok: true },
+      { text: '是路顺', ok: false }
+    ],
+    explain: '顺差就是卖出去的多，买回来的少。逆差就反过来。'
+  },
+  {
+    id: 'gq_091', cat: '宏观', icon: '💵', title: '人民币升值',
+    scene: '弟子{name}听说朝廷的铜板升值了，问掌门这是好事还是坏事。',
+    options: [
+      { text: '一定是好事', ok: false },
+      { text: '买海外的东西划得来，卖出去的要吃亏', ok: true },
+      { text: '跟我们莫得关系', ok: false }
+    ],
+    explain: '钱升值了，买海外的东西便宜，出去耍也划算。但卖东西到海外的，换回来就少了，要吃亏。'
+  },
+  {
+    id: 'gq_092', cat: '宏观', icon: '📈', title: '滞胀',
+    scene: '弟子{name}听人说什么「滞胀」，问掌门这是啥子毛病。',
+    options: [
+      { text: '是走不动路', ok: false },
+      { text: '是买卖不涨，物价还涨，最难办的境况', ok: true },
+      { text: '是走路慢', ok: false }
+    ],
+    explain: '滞胀就是买卖不景气，物价还一个劲地涨。又挣不到钱，钱还不值钱，最难办。'
+  },
+  {
+    id: 'gq_093', cat: '宏观', icon: '🏛️', title: '财政货币',
+    scene: '弟子{name}问掌门：「朝廷里头有两拨人管钱，一拨管收税花钱，一拨管印钱收钱，那两拨啥子区别？」',
+    options: [
+      { text: '一样的', ok: false },
+      { text: '管收税花钱的是财政，管印钱的是货币', ok: true },
+      { text: '都是管印钱的', ok: false }
+    ],
+    explain: '财政是朝廷收税、花钱。货币是央行印钱、调利息。两拨人，各管一头。'
+  },
+
+  // ===== 投资心理（续）=====
+  {
+    id: 'gq_094', cat: '投资心理', icon: '🎲', title: '赌徒谬误',
+    scene: '弟子{name}说：「掌门，弟子买的那只票跌了五天咯，弟子觉得明天肯定要涨。」',
+    options: [
+      { text: '有道理', ok: false },
+      { text: '每次涨跌都是独立的，跌了五天不代表明天涨', ok: true },
+      { text: '那是运气不好', ok: false }
+    ],
+    explain: '前头跌了，跟明天涨不涨莫得关系。莫拿"该涨了"来哄自己，这是赌徒的心思。'
+  },
+  {
+    id: 'gq_095', cat: '投资心理', icon: '🎯', title: '锚定',
+    scene: '弟子{name}说：「掌门，弟子这只票买成一百毛，现在跌到八十，弟子不甘心卖，等回到一百就卖。」',
+    options: [
+      { text: '有道理，等回本', ok: false },
+      { text: '买价只是买价，看的是它以后值好多，不是过去买了好多', ok: true },
+      { text: '多等一下就好了', ok: false }
+    ],
+    explain: '买价是你的买价，市场不管你买成好多。看的是它以后还值好多，莫被买价绑死咯。'
+  },
+  {
+    id: 'gq_096', cat: '投资心理', icon: '💡', title: '能力圈',
+    scene: '弟子{name}看到别人做玉石买卖赚了大钱，心动，也想去。可他自己连玉石都分不清。',
+    options: [
+      { text: '跟着买就行', ok: false },
+      { text: '不懂的买卖莫沾——只在懂的里头做', ok: true },
+      { text: '学两天就会了', ok: false }
+    ],
+    explain: '你懂啥子，就在啥子里头做。不懂的买卖，别人赚，你未必赚。这叫能力圈。'
+  },
+  {
+    id: 'gq_097', cat: '投资心理', icon: '⏳', title: '长期',
+    scene: '弟子{name}天天盯到墙上，涨了笑，跌了哭，人都瘦了一圈。掌门劝他，他说忍不住。',
+    options: [
+      { text: '盯到好些', ok: false },
+      { text: '看长远些，莫天天盯，多看一眼多一分焦虑', ok: true },
+      { text: '盯到才稳当', ok: false }
+    ],
+    explain: '天天盯，心态要绷断。看长远点，反而赚得多。钱是等出来的，不是盯出来的。'
+  },
+  {
+    id: 'gq_098', cat: '投资心理', icon: '🎁', title: '幸存者偏差',
+    scene: '弟子{name}说：「掌门，弟子听人说做玉石买卖赚了几十万毛，弟子也想去。」',
+    options: [
+      { text: '赶紧去', ok: false },
+      { text: '你只看到赚了的，那些亏了的没出来说话', ok: true },
+      { text: '赚的人是运气好', ok: false }
+    ],
+    explain: '你只看到赚了的那个。街上做玉石亏了家当的，早就不好意思出门咯。这叫幸存者偏差。'
+  },
+  {
+    id: 'gq_099', cat: '投资心理', icon: '💊', title: '沉没成本',
+    scene: '弟子{name}开了一间铺子，亏了半年，还想接着投钱，说：「都投了这么多了，不能就这么算了。」',
+    options: [
+      { text: '对，投都投了', ok: false },
+      { text: '前面投的钱叫沉没成本，已经收不回来，看的是它以后能不能行', ok: true },
+      { text: '再投一年看看', ok: false }
+    ],
+    explain: '投进去收不回来的钱，叫沉没成本。看的是铺子以后行不行，不是前面投了好多。'
+  },
+  {
+    id: 'gq_100', cat: '投资心理', icon: '🧘', title: '仓位',
+    scene: '弟子{name}把全部家当都押在一只票上，掌门劝他留点。弟子说：「押得重才赚得多。」',
+    options: [
+      { text: '有道理', ok: false },
+      { text: '押得重，亏起来也重。要留点余地，才睡得着觉', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '押得重，赚得确实多，但亏起来一样重。要留点余地，才扛得住波动，晚上才睡得着。'
+  },
+
+  // ===== 生活理财（续）=====
+  {
+    id: 'gq_101', cat: '生活理财', icon: '💰', title: '砍头息',
+    scene: '弟子{name}借了一笔钱，说好一百毛，到手只有九十毛，人家说那十毛是「先扣的利钱」。',
+    options: [
+      { text: '很正常', ok: false },
+      { text: '这叫砍头息——是违规的，借一百就只能到手一百', ok: true },
+      { text: '看人吧', ok: false }
+    ],
+    explain: '借一百到手九十，那十毛就是砍头息。这是违规的，告到衙门要挨罚。'
+  },
+  {
+    id: 'gq_102', cat: '生活理财', icon: '📱', title: '花呗白条',
+    scene: '弟子{name}用「花呗」「白条」花起没感觉，月底一算，花出去的比自己挣的还多。',
+    options: [
+      { text: '很正常', ok: false },
+      { text: '花起来莫感觉，是这类东西最要紧的坑', ok: true },
+      { text: '多用几次就习惯咯', ok: false }
+    ],
+    explain: '先花后还，花的时候莫感觉，还的时候才心疼。用多了，就成了无底洞。'
+  },
+  {
+    id: 'gq_103', cat: '生活理财', icon: '💳', title: '最低还款',
+    scene: '弟子{name}信用卡还不上，选了「最低还款」，以为占了大便宜。',
+    options: [
+      { text: '是占了便宜', ok: false },
+      { text: '剩下没还的按天算利钱，比高利贷还凶', ok: true },
+      { text: '莫得关系', ok: false }
+    ],
+    explain: '最低还款只是不逾期，剩下没还的部分按天算利钱，滚起来吓人。'
+  },
+  {
+    id: 'gq_104', cat: '生活理财', icon: '⏰', title: '免息期',
+    scene: '弟子{name}听说信用卡有「免息期」，问掌门最长能有好多天。',
+    options: [
+      { text: '永远免息', ok: false },
+      { text: '二十到五十天，要看账单日和还款日', ok: true },
+      { text: '只免一天', ok: false }
+    ],
+    explain: '免息期一般是二十到五十天，看你哪天花的。账单日到还款日之间最长。'
+  },
+  {
+    id: 'gq_105', cat: '生活理财', icon: '📋', title: '征信查询',
+    scene: '弟子{name}想借钱，人家说要查「征信」。弟子问掌门征信咋个查。',
+    options: [
+      { text: '只能到衙门查', ok: false },
+      { text: '朝廷有专门的册子，本人每年可以免费查几次', ok: true },
+      { text: '查不了', ok: false }
+    ],
+    explain: '朝廷有专门的册子，本人每年可以免费查几次。莫让别人乱查，查多了影响征信。'
+  },
+  {
+    id: 'gq_106', cat: '生活理财', icon: '🔍', title: '硬查询',
+    scene: '弟子{name}申请了几家钱庄的贷款，结果都没批。后来再申请，人家说征信「花了」。',
+    options: [
+      { text: '是钱庄小气', ok: false },
+      { text: '每次申请贷款都会留记录，查多了会让人觉得你缺钱', ok: true },
+      { text: '是弟子长得不行', ok: false }
+    ],
+    explain: '每申请一次贷款，征信上就多一条。查多了，人家觉得你到处借钱，就不敢借给你咯。'
+  },
+  {
+    id: 'gq_107', cat: '生活理财', icon: '💰', title: '等额本息',
+    scene: '弟子{name}借钱庄的钱，选的是「每月还一样多」那种。还了一年，本金好像没少好多。弟子纳闷。',
+    options: [
+      { text: '钱庄黑', ok: false },
+      { text: '前面还的多半是利钱，本金少，这很正常', ok: true },
+      { text: '是算错了', ok: false }
+    ],
+    explain: '每月还一样多的叫等额本息。前面还的多半是利钱，本金少，后面才慢慢变多。'
+  },
+  {
+    id: 'gq_108', cat: '生活理财', icon: '🎯', title: '年化陷阱',
+    scene: '弟子{name}借钱，人家说「月利只要一分」，弟子觉得很便宜。回来一算，一年下来吓一跳。',
+    options: [
+      { text: '月利一分不贵', ok: false },
+      { text: '月利一分折成年化就是十二分，一点也不便宜', ok: true },
+      { text: '算错了', ok: false }
+    ],
+    explain: '月利一分，一年就是十二分。好些地方用月利、日利来糊人，折成年化一看，吓一跳。'
+  },
+  {
+    id: 'gq_109', cat: '生活理财', icon: '🎁', title: '攒钱',
+    scene: '弟子{name}说：「掌门，弟子每个月挣得也不少，就是攒不下钱。」',
+    options: [
+      { text: '挣得太少', ok: false },
+      { text: '攒钱要"先攒后花"，拿到手先留一笔，剩下的再花', ok: true },
+      { text: '莫得法子', ok: false }
+    ],
+    explain: '拿到钱先留一笔，剩下的再花，这才攒得下。反过来先花后攒，多半攒不成。'
+  },
+  {
+    id: 'gq_110', cat: '生活理财', icon: '🏦', title: '记账',
+    scene: '弟子{name}说每个月钱花得不明不白，问掌门咋个才能搞清楚。',
+    options: [
+      { text: '把钱都存起来', ok: false },
+      { text: '记个账——每一笔进出都写下来', ok: true },
+      { text: '莫得法子', ok: false }
+    ],
+    explain: '把每一笔都记下来，月底一看就晓得钱跑哪去了。记了三个月，自己都吓一跳。'
+  },
+  {
+    id: 'gq_111', cat: '生活理财', icon: '💡', title: '断舍离',
+    scene: '弟子{name}屋子里堆满了东西，钱都花在这上头了。问掌门咋个办。',
+    options: [
+      { text: '多买点收纳的', ok: false },
+      { text: '只留真正要用的，其余的处理掉，也少花冤枉钱', ok: true },
+      { text: '搬家', ok: false }
+    ],
+    explain: '东西多了，钱也花了，屋子也挤了。只留要用的，剩下的处理掉，清爽又省钱。'
+  },
+  {
+    id: 'gq_112', cat: '生活理财', icon: '🛒', title: '冲动消费',
+    scene: '弟子{name}看到打折就走不动路，买回来又用不上。问掌门咋个治。',
+    options: [
+      { text: '打折就买，划算', ok: false },
+      { text: '买之前先问自己：不打折的时候，还会不会买', ok: true },
+      { text: '多买点就习惯了', ok: false }
+    ],
+    explain: '打折只是让你觉得占了便宜，不是真的需要。买前先问一句：不打折还买不买？'
+  },
+
+  // ===== 债券（续）=====
+  {
+    id: 'gq_113', cat: '债券', icon: '📜', title: '到期收益率',
+    scene: '弟子{name}手里有一张债，问掌门咋个算划不划算。',
+    options: [
+      { text: '看票面上的利钱', ok: false },
+      { text: '要看"到期收益率"——把买价、利钱、到期还本都算进去', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '票面利钱只是面上的。要看划不划算，得把买价、利钱、到期还本一起算，叫到期收益率。'
+  },
+  {
+    id: 'gq_114', cat: '债券', icon: '🏛️', title: '国债逆回购',
+    scene: '弟子{name}听说有一种买卖，把钱借出去一夜，第二天连本带利还，对方拿国债押到。弟子问靠不靠得住。',
+    options: [
+      { text: '靠不住', ok: false },
+      { text: '叫国债逆回购，稳当，短期闲钱可以放', ok: true },
+      { text: '是骗局', ok: false }
+    ],
+    explain: '对方拿国债押到，你把钱借出去一夜，第二天连本带利拿回来。短期闲钱放这儿，稳当。'
+  },
+  {
+    id: 'gq_115', cat: '债券', icon: '💵', title: '信用评级',
+    scene: '弟子{name}想买一张商号的债，看到有「评级」两个字，问掌门是啥子意思。',
+    options: [
+      { text: '是商号的等级', ok: false },
+      { text: '是评它还不还得上钱的等级，越低风险越高', ok: true },
+      { text: '是利息高低', ok: false }
+    ],
+    explain: '评级是评它还不还得上钱。等级高，还钱把稳，利钱低；等级低，利钱高，但要担大风险。'
+  },
+  {
+    id: 'gq_116', cat: '债券', icon: '🎫', title: '零息债',
+    scene: '弟子{name}听说有一种债，不付利钱，但是卖得便宜。弟子觉得怪。',
+    options: [
+      { text: '是骗子', ok: false },
+      { text: '是零息债——便宜买进，到期按原价还本', ok: true },
+      { text: '是废纸', ok: false }
+    ],
+    explain: '零息债不付利钱，但买的时候便宜，到期按原价还。省下来的差价就是赚的。'
+  },
+  {
+    id: 'gq_117', cat: '债券', icon: '🏭', title: '企业债',
+    scene: '弟子{name}说：「掌门，朝廷的债利钱太少了，弟子想买商号的债，利钱高些。」',
+    options: [
+      { text: '商号债肯定稳', ok: false },
+      { text: '商号债利钱高，但要看商号还不还得上，有风险', ok: true },
+      { text: '商号债是骗人的', ok: false }
+    ],
+    explain: '商号债利钱高，是因为风险也高。万一商号倒了，本钱都可能拿不回来。'
+  },
+  {
+    id: 'gq_118', cat: '债券', icon: '⏳', title: '久期',
+    scene: '弟子{name}听人说债有「久期」，问掌门这是啥子。',
+    options: [
+      { text: '是放好久', ok: false },
+      { text: '是衡量债对利钱变化敏不敏感——久期越长，利钱一动，价就动得多', ok: true },
+      { text: '是发行的时间', ok: false }
+    ],
+    explain: '久期越长，利钱一动，价格动得就越凶。买债的，要看这个。'
+  },
+
+  // ===== 基础理财（续）=====
+  {
+    id: 'gq_119', cat: '基础理财', icon: '🎯', title: '目标',
+    scene: '弟子{name}说：「掌门，弟子想攒钱，可总攒不下。」掌门问他攒钱干啥子，他说不上来。',
+    options: [
+      { text: '攒钱不需要目标', ok: false },
+      { text: '攒钱要先有个目标——买房、娶亲、还是养老，越具体越好', ok: true },
+      { text: '看心情', ok: false }
+    ],
+    explain: '攒钱要有个由头。有个具体的数、具体的事，攒起来才有劲。'
+  },
+  {
+    id: 'gq_120', cat: '基础理财', icon: '💼', title: '副业',
+    scene: '弟子{name}想搞点副业多挣些。问掌门该咋个选。',
+    options: [
+      { text: '哪个来钱快选哪个', ok: false },
+      { text: '要看跟主业冲不冲突，能不能长期积累', ok: true },
+      { text: '看别人做啥', ok: false }
+    ],
+    explain: '副业不要跟主业打架，最好还能攒点本事。只图眼前来钱快的，多半长久不了。'
+  },
+  {
+    id: 'gq_121', cat: '基础理财', icon: '📚', title: '人力资本',
+    scene: '弟子{name}问：「掌门，弟子莫得家底，咋个才算有本钱？」',
+    options: [
+      { text: '莫得家底就没本钱', ok: false },
+      { text: '你的身子、本事、学问，就是最大的本钱', ok: true },
+      { text: '等有钱再说', ok: false }
+    ],
+    explain: '你的身子、你的本事、你的学问，就是最大的本钱。学东西，就是给自己攒本钱。'
+  },
+  {
+    id: 'gq_122', cat: '基础理财', icon: '💼', title: '职业天花板',
+    scene: '弟子{name}说：「掌门，弟子在这个位子上干了好几年，好像再也上不去了。」',
+    options: [
+      { text: '是你不够努力', ok: false },
+      { text: '这叫天花板——有的位子天生就有上限，要换条路才行', ok: true },
+      { text: '再等等', ok: false }
+    ],
+    explain: '有的位子干到头也就那样，这叫天花板。想再上，得换条路走，或者换个行当。'
+  },
+  {
+    id: 'gq_123', cat: '基础理财', icon: '💡', title: '斜杠',
+    scene: '弟子{name}白天在宗门修行，晚上给人抄书赚钱，周末还去给人看宅子。掌门问他为啥子这么忙。',
+    options: [
+      { text: '太辛苦了，别做了', ok: false },
+      { text: '这叫斜杠，一个人有多种身份，也是抗风险的法子', ok: true },
+      { text: '是不务正业', ok: false }
+    ],
+    explain: '一个人有几样本事、几个来钱的路子，这叫斜杠。一条路断了，还有别的走。'
+  },
+  {
+    id: 'gq_124', cat: '基础理财', icon: '💰', title: '睡后收入',
+    scene: '弟子{name}问：「掌门，弟子听说有一种收入，睡起觉都在来钱，真的假的？」',
+    options: [
+      { text: '假的', ok: false },
+      { text: '真的有——像房租、分红、利息，不用天天出力', ok: true },
+      { text: '是骗局', ok: false }
+    ],
+    explain: '房租、分红、利息，这些不用你天天出力，钱自己就来。这叫被动收入，也叫睡后收入。'
+  },
+
+  // ===== 银行存款（续）=====
+  {
+    id: 'gq_125', cat: '银行存款', icon: '💰', title: '零存整取',
+    scene: '弟子{name}想攒钱，钱庄说可以「零存整取」，每个月存一点，到期一次取。弟子问划不划算。',
+    options: [
+      { text: '不划算', ok: false },
+      { text: '适合管不住手的人——强制攒钱', ok: true },
+      { text: '是骗人的', ok: false }
+    ],
+    explain: '零存整取就是每月存一点，到期一次拿。利钱不算高，但适合攒不下钱的人。'
+  },
+  {
+    id: 'gq_126', cat: '银行存款', icon: '💧', title: '整存零取',
+    scene: '弟子{name}手头有一笔毛，想按期拿一点出来用。钱庄说可以「整存零取」。',
+    options: [
+      { text: '不行', ok: false },
+      { text: '可以，一次存入，按期取一点出来', ok: true },
+      { text: '是骗人的', ok: false }
+    ],
+    explain: '整存零取就是一次存入，之后按期取一点用。适合手里有笔钱、但想分期用的。'
+  },
+  {
+    id: 'gq_127', cat: '银行存款', icon: '📜', title: '通知存款',
+    scene: '弟子{name}问：「掌门，弟子有一笔钱，随时可能要用，又不想存活期，咋个办？」',
+    options: [
+      { text: '存活期', ok: false },
+      { text: '通知存款——提前跟钱庄打个招呼，就能取', ok: true },
+      { text: '莫得法子', ok: false }
+    ],
+    explain: '通知存款介于活期和定期之间。要用了，提前一天或七天跟钱庄说一声，就能取。'
+  },
+  {
+    id: 'gq_128', cat: '银行存款', icon: '🏦', title: '利率浮动',
+    scene: '弟子{name}说：「掌门，弟子看两家钱庄，同样的存法，利钱咋个不一样？」',
+    options: [
+      { text: '是有一家黑心', ok: false },
+      { text: '朝廷只给个基准，各家可以在上头浮动', ok: true },
+      { text: '是算错了', ok: false }
+    ],
+    explain: '朝廷只给个基准数，各家钱庄可以在上头加点、减点，所以利钱不完全一样。'
+  },
+  {
+    id: 'gq_129', cat: '银行存款', icon: '💰', title: '压岁钱',
+    scene: '弟子{name}有个小师弟，每年过年都得一笔压岁钱，问掌门该咋个帮他存。',
+    options: [
+      { text: '花了算了', ok: false },
+      { text: '帮他开个户，教他记账，从小养成习惯', ok: true },
+      { text: '不归你管', ok: false }
+    ],
+    explain: '从小教他管钱，比给好多钱都值。开个户，记个账，让他自己管一小部分。'
+  },
+
+  // ===== 股票（再续）=====
+  {
+    id: 'gq_130', cat: '股票', icon: '🏛️', title: '科创',
+    scene: '弟子{name}说：「掌门，弟子听说有个『科创板』，跟寻常的票不一样。啥子不一样嘛？」',
+    options: [
+      { text: '一样的', ok: false },
+      { text: '门槛高，涨跌也大，一天最多动两成', ok: true },
+      { text: '是给官家买的', ok: false }
+    ],
+    explain: '科创板门槛高，一天涨跌最多两成，比寻常的票凶。没搞懂莫乱买。'
+  },
+  {
+    id: 'gq_131', cat: '股票', icon: '📉', title: 'ST',
+    scene: '弟子{name}手里的票名字前头突然多了两个字母「ST」，问掌门是啥子意思。',
+    options: [
+      { text: '是好事', ok: false },
+      { text: '是商号出了问题，被朝廷警示了', ok: true },
+      { text: '是商号上市了', ok: false }
+    ],
+    explain: 'ST 是商号出了毛病，比如连着亏钱，被朝廷警示了。这种票要小心。'
+  },
+  {
+    id: 'gq_132', cat: '股票', icon: '🏢', title: '配股',
+    scene: '弟子{name}手里的商号说可以「配股」，让股东再拿钱买新股，比市面便宜。弟子问该不该买。',
+    options: [
+      { text: '不买就亏了', ok: false },
+      { text: '不买股份会稀释，买又得出钱，看手里宽不宽裕', ok: true },
+      { text: '一定是好事', ok: false }
+    ],
+    explain: '配股不买，你手里的股占比就变小咯。要买，又要再拿钱出来。手头不宽裕就莫勉强。'
+  },
+  {
+    id: 'gq_133', cat: '股票', icon: '💵', title: '分红',
+    scene: '弟子{name}手里的票分红了，开心的跑来告诉掌门。',
+    options: [
+      { text: '分红就白赚了', ok: false },
+      { text: '分红后股价要下调，总资产没变，只是换了个形式', ok: true },
+      { text: '是白给的', ok: false }
+    ],
+    explain: '分红之后，股价要相应往下调。你的钱没多，只是换成了现钱。'
+  },
+  {
+    id: 'gq_134', cat: '股票', icon: '🎯', title: '大盘',
+   scene: '弟子{name}说：「掌门，今日全城都在说『大盘涨了』，大盘是啥子？」',
+    options: [
+      { text: '是最大的那只票', ok: false },
+      { text: '是把好多种票综合起来的一个数', ok: true },
+      { text: '是官家的票', ok: false }
+    ],
+    explain: '大盘是把好多票综合起来算的一个数。大盘涨，多数票也涨；大盘跌，多数票也跌。'
+  },
+  {
+    id: 'gq_135', cat: '股票', icon: '👥', title: '散户',
+    scene: '弟子{name}听人说自己「散户」，问掌门这是啥子身份。',
+    options: [
+      { text: '是散开的户', ok: false },
+      { text: '是小本买卖的，跟大庄家不一样', ok: true },
+      { text: '是官家', ok: false }
+    ],
+    explain: '散户就是小本买卖的，钱不多。跟大庄家比，散户信息慢、力气小，要小心。'
+  },
+
+  // ===== 基金（再续）=====
+  {
+    id: 'gq_136', cat: '基金', icon: '🔄', title: '转换',
+    scene: '弟子{name}买了一只基金，想换成另外一只，问掌门咋个办最省事。',
+    options: [
+      { text: '先赎再买', ok: false },
+      { text: '有些平台可以直接转换，省时间也省钱', ok: true },
+      { text: '莫得法子', ok: false }
+    ],
+    explain: '有些平台可以直接把一只基金换成另一只，比先赎再买快，费用也可能更省。'
+  },
+  {
+    id: 'gq_137', cat: '基金', icon: '📉', title: '止损',
+    scene: '弟子{name}的基金跌了两成，问掌门要不要割了。',
+    options: [
+      { text: '割了算了', ok: false },
+      { text: '先看当初为啥子买它，理由还在就不慌', ok: true },
+      { text: '再等等', ok: false }
+    ],
+    explain: '跌了先莫慌。问问自己当初为啥子买它，如果那个理由还在，就莫急到割。'
+  },
+  {
+    id: 'gq_138', cat: '基金', icon: '📊', title: '基金定投止盈',
+    scene: '弟子{name}定投了好几年，赚了不少，问掌门啥时候该收手。',
+    options: [
+      { text: '永远不止盈', ok: false },
+      { text: '设个目标，赚到就落袋为安', ok: true },
+      { text: '看心情', ok: false }
+    ],
+    explain: '定投也要有止盈的打算。设个目标，赚够了就落袋为安，莫贪。'
+  },
+  {
+    id: 'gq_139', cat: '基金', icon: '🏢', title: '私募',
+    scene: '弟子{name}听说有一种基金只给「合格的人」买，门槛很高。',
+    options: [
+      { text: '是骗人的', ok: false },
+      { text: '叫私募——只给有钱、有经验的人买', ok: true },
+      { text: '是官家的', ok: false }
+    ],
+    explain: '私募只卖给有钱、有经验的人，门槛高。普通人碰不到，也不该碰。'
+  },
+  {
+    id: 'gq_140', cat: '基金', icon: '📋', title: '基金合同',
+    scene: '弟子{name}买基金前，人家给他一本厚厚的合同。弟子看不懂，想扔了。',
+    options: [
+      { text: '扔了算了', ok: false },
+      { text: '要翻一翻——里头写了费用、风险、咋个赎', ok: true },
+      { text: '让别个看', ok: false }
+    ],
+    explain: '合同里头写了费用、风险、咋个赎。看不懂也要翻一翻，特别看费用和风险那几段。'
+  },
+  {
+    id: 'gq_141', cat: '基金', icon: '💰', title: '基金分红',
+    scene: '弟子{name}的基金分红了，问掌门是不是白赚了。',
+    options: [
+      { text: '是白赚的', ok: false },
+      { text: '分红后净值要下调，选现金分红或红利再投', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '分红后净值要往下调，钱没多。可以选拿现钱，也可以选再投进去买更多份额。'
+  },
+
+  // ===== 房产税务（续）=====
+  {
+    id: 'gq_142', cat: '房产税务', icon: '🏠', title: '首付',
+    scene: '弟子{name}想买房，问掌门咋个才能少借点钱庄的钱。',
+    options: [
+      { text: '借多点', ok: false },
+      { text: '多凑点首付，借得少，利钱也少', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '首付给得多，借得就少，利钱也少。手里宽裕的话，多凑点首付划算。'
+  },
+  {
+    id: 'gq_143', cat: '房产税务', icon: '📋', title: '满五唯一',
+    scene: '弟子{name}想卖房，人家说「满五唯一」可以不交个税。弟子不懂。',
+    options: [
+      { text: '是骗人的', ok: false },
+      { text: '是房住满五年、且是家里唯一住房，卖的时候可以免个税', ok: true },
+      { text: '是住了五年', ok: false }
+    ],
+    explain: '满五唯一就是住满五年，并且是家里唯一住房。卖的时候个税可以免。'
+  },
+  {
+    id: 'gq_144', cat: '房产税务', icon: '💰', title: '增值税',
+    scene: '弟子{name}卖房时被扣了一笔「增值税」，问掌门这是啥子。',
+    options: [
+      { text: '是乱收的', ok: false },
+      { text: '是卖东西时对赚的部分收的税', ok: true },
+      { text: '是中介费', ok: false }
+    ],
+    explain: '增值税是对赚的部分收的税。买卖东西、提供服务，多半都要交。'
+  },
+  {
+    id: 'gq_145', cat: '房产税务', icon: '🏛️', title: '个税起征',
+    scene: '弟子{name}问：「掌门，弟子每月挣的钱，好多才开始交个税？」',
+    options: [
+      { text: '三百毛', ok: false },
+      { text: '五千毛起，超过的部分才交', ok: true },
+      { text: '好多都要交', ok: false }
+    ],
+    explain: '现在起征点是五千毛，超过的部分才按等级交税。挣得少的，多半不用交。'
+  },
+
+  // ===== 保险（再续）=====
+  {
+    id: 'gq_146', cat: '保险', icon: '👨‍👩‍👧', title: '保险利益',
+    scene: '弟子{name}想给邻居买保险，人家说不行。弟子不解。',
+    options: [
+      { text: '是人家耍赖', ok: false },
+      { text: '买保险得对人家有「保险利益」——家人、债主才行', ok: true },
+      { text: '是弟子钱少', ok: false }
+    ],
+    explain: '买保险得对人家有保险利益，比如父子、夫妻、债主。邻居不行，防的是有人动歪心思。'
+  },
+  {
+    id: 'gq_147', cat: '保险', icon: '🧓', title: '老年人防诈',
+    scene: '弟子{name}回家，发现爷爷在听人说「高息养老理财」，还准备把老本钱投进去。弟子慌了。',
+    options: [
+      { text: '老人愿意投就投', ok: false },
+      { text: '高息养老理财多是骗局，要劝住', ok: true },
+      { text: '投一点点试试', ok: false }
+    ],
+    explain: '高息养老理财十有八九是骗局，盯到的是老人的老本钱。要劝住，还要陪着去查。'
+  },
+  {
+    id: 'gq_148', cat: '保险', icon: '🚨', title: '冒充保险',
+    scene: '弟子{name}接到电话，说他的保险要「升级」，叫他转钱。弟子差点就转了。',
+    options: [
+      { text: '转了没事', ok: false },
+      { text: '是诈骗——正规保险不会电话叫你转钱', ok: true },
+      { text: '小心点就行', ok: false }
+    ],
+    explain: '正规保险不会打电话叫你转钱。遇到这种电话，先打官方电话核实。'
+  },
+
+  // ===== 反诈（再续）=====
+  {
+    id: 'gq_149', cat: '反诈', icon: '🔌', title: '共享屏幕',
+    scene: '弟子{name}接到电话，对方说帮他处理问题，叫他开「共享屏幕」。弟子想开。',
+    options: [
+      { text: '开就是', ok: false },
+      { text: '危险——共享屏幕等于把手机给人家看', ok: true },
+      { text: '没关系', ok: false }
+    ],
+    explain: '共享屏幕就是把你手机给人家看。验证码、账户、密码，全暴露。正经办事不会叫你开这个。'
+  },
+  {
+    id: 'gq_150', cat: '反诈', icon: '🎰', title: '境外赌博',
+    scene: '弟子{name}被人拉进一个群，说里面能「稳赢」。开头真赢了几毛。',
+    options: [
+      { text: '跟着下注', ok: false },
+      { text: '是诈骗——先让你赢，再让你输得倾家荡产', ok: true },
+      { text: '小玩一下', ok: false }
+    ],
+    explain: '开头让你赢几毛，是钓你上钩。等你投大的，一晚上输得底朝天。境外赌局，十赌十输。'
+  },
+
+  // ===== 生活理财（续）=====
+  {
+    id: 'gq_151', cat: '生活理财', icon: '🍜', title: '外卖',
+    scene: '弟子{name}算账，发现一个月光吃饭就花了一小半钱。掌门问他咋个花的。他说：「顿顿外卖，省事。」',
+    options: [
+      { text: '省事就值', ok: false },
+      { text: '自己弄几顿，一个月能省不少', ok: true },
+      { text: '看心情', ok: false }
+    ],
+    explain: '顿顿外卖，看着一顿不多，一个月加起来吓人。自己弄几顿，钱就省下来咯。'
+  },
+  {
+    id: 'gq_152', cat: '生活理财', icon: '📱', title: '会员',
+    scene: '弟子{name}说：「掌门，弟子手机上开了七八个会员，每个月自动扣钱，弟子都不晓得扣了好多。」',
+    options: [
+      { text: '开着就开着', ok: false },
+      { text: '把不用的停了，一年下来是笔大钱', ok: true },
+      { text: '莫得关系', ok: false }
+    ],
+    explain: '好几个会员自动续，一个月几十毛，一年就是几百。用不上的，赶紧停。'
+  },
+  {
+    id: 'gq_153', cat: '生活理财', icon: '☕', title: '小习惯',
+    scene: '弟子{name}每天都要喝一杯茶，说一天才几毛，不算啥子。掌门给他算了算一年。',
+    options: [
+      { text: '一天几毛，确实不多', ok: false },
+      { text: '一天几毛，一年下来也是一笔大钱', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '一天几毛听着不多，一年下来就是几百。小习惯最容易掏空钱包。'
+  },
+  {
+    id: 'gq_154', cat: '生活理财', icon: '🛍️', title: '名牌',
+    scene: '弟子{name}省吃俭用买了件名牌，回来跟大家炫耀。掌门问他：「穿上以后，你本事长了？」',
+    options: [
+      { text: '长面子就够了', ok: false },
+      { text: '名牌不长本事，钱花了就是花了', ok: true },
+      { text: '看场合', ok: false }
+    ],
+    explain: '名牌穿上好看，但你的本事没长。花这个钱，是给别个看的，不是给自己的。'
+  },
+  {
+    id: 'gq_155', cat: '生活理财', icon: '📅', title: '双十一',
+    scene: '弟子{name}看到各家商号都在打折，忍不住买了一大堆。买回来才发现，好些用不上。',
+    options: [
+      { text: '打折就买，划算', ok: false },
+      { text: '打折之前先问：不打折的时候，要不要买', ok: true },
+      { text: '看别人买不买', ok: false }
+    ],
+    explain: '打折是商号的套路，让你觉得占了便宜。买之前先问问自己，不打折的时候要不要买。'
+  },
+  {
+    id: 'gq_156', cat: '生活理财', icon: '🏪', title: '逛超市',
+    scene: '弟子{name}去市集，本来说好只买两样，出来的时候提了一大包。',
+    options: [
+      { text: '多买点没关系', ok: false },
+      { text: '出门前先列个单子，按单子买', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '出门前先列单子，进了市集按单子买。不然看啥子都想买，一回就多花好多。'
+  },
+  {
+    id: 'gq_157', cat: '生活理财', icon: '💸', title: '借钱给朋友',
+    scene: '弟子{name}的朋友来借钱，说好一个月还。弟子想问掌门该不该借。',
+    options: [
+      { text: '朋友有难，肯定借', ok: false },
+      { text: '要看你舍不舍得这笔钱，舍不舍得这段情', ok: true },
+      { text: '不借', ok: false }
+    ],
+    explain: '借钱给朋友，先想清楚：这笔钱要不回来，你舍不舍得；这段情，还能不能处。'
+  },
+  {
+    id: 'gq_158', cat: '生活理财', icon: '📊', title: '家庭账本',
+    scene: '弟子{name}成了家，两口子各花各的，月底一对，完全对不上。',
+    options: [
+      { text: '各管各的就行', ok: false },
+      { text: '一起记个家庭账本，互相通气', ok: true },
+      { text: '谁挣得多谁做主', ok: false }
+    ],
+    explain: '两口子各记各的，就永远对不上。搞一个共用的账本，互相晓得花到哪了。'
+  },
+  {
+    id: 'gq_159', cat: '生活理财', icon: '🏠', title: '搬家',
+    scene: '弟子{name}换了住处，发现押金要不回来，还赔了一笔。问掌门当初咋个没留心。',
+    options: [
+      { text: '倒霉', ok: false },
+      { text: '入住先拍照、留凭证，搬走时才好交底', ok: true },
+      { text: '莫得法子', ok: false }
+    ],
+    explain: '入住前拍个照、留个凭证，搬走的时候才好在房东面前说得清。'
+  },
+  {
+    id: 'gq_160', cat: '生活理财', icon: '💰', title: '中奖',
+    scene: '弟子{name}中了一笔小奖，想立刻花掉。掌门劝他。',
+    options: [
+      { text: '花就花，反正是白得的', ok: false },
+      { text: '意外之财，先存一半，剩下一半再花', ok: true },
+      { text: '都花掉才开心', ok: false }
+    ],
+    explain: '中奖的钱来得容易，去得也容易。先存一半，剩下一半再花，钱才留得住。'
+  },
+  {
+    id: 'gq_161', cat: '生活理财', icon: '🏥', title: '看病',
+    scene: '弟子{name}的爹病了，看医生花了不少。弟子说：「早晓得当初该买份保险。」',
+    options: [
+      { text: '事后的话莫用', ok: false },
+      { text: '现在买也不迟，从今日起把风险兜住', ok: true },
+      { text: '等等再买', ok: false }
+    ],
+    explain: '事后感慨莫得用。现在开始把风险兜住，比啥子都不做要强。'
+  },
+  {
+    id: 'gq_162', cat: '生活理财', icon: '🚬', title: '烟酒',
+    scene: '弟子{name}每天抽烟喝酒，一个月花不少。掌门问他算过没有。',
+    options: [
+      { text: '抽烟喝酒是人情', ok: false },
+      { text: '一天几毛，一年就是一大笔，还伤身子', ok: true },
+      { text: '看个人', ok: false }
+    ],
+    explain: '一天几毛，一年就是一大笔。钱花了，身子还遭罪，两样都不划算。'
+  },
+  {
+    id: 'gq_163', cat: '生活理财', icon: '📱', title: '短信扣费',
+    scene: '弟子{name}每月话费都超，查看账单，一堆不晓得的服务在扣钱。',
+    options: [
+      { text: '算了', ok: false },
+      { text: '打客服取消，好些服务是默认开的', ok: true },
+      { text: '换号', ok: false }
+    ],
+    explain: '好些服务是默认开的，你不管就一直扣。打客服取消，一年能省不少。'
+  },
+  {
+    id: 'gq_164', cat: '生活理财', icon: '💧', title: '水电气',
+    scene: '弟子{name}说每个月水电气都快赶上房租了。掌门问他自己家的表看没看。',
+    options: [
+      { text: '看那个干啥子', ok: false },
+      { text: '自己看一眼表，跟账单对一对，有时会算错', ok: true },
+      { text: '莫得办法', ok: false }
+    ],
+    explain: '偶尔自己看一眼表，跟账单对一对。有时候是真算错了，你不查就一直交。'
+  },
+  {
+    id: 'gq_165', cat: '生活理财', icon: '👶', title: '养娃',
+    scene: '弟子{name}刚添了个娃，天天买这买那。掌门问他，这些都用得上不。',
+    options: [
+      { text: '为娃儿花啥子都值', ok: false },
+      { text: '娃儿的东西，用得上才买，莫被商号牵着走', ok: true },
+      { text: '看别人买啥子', ok: false }
+    ],
+    explain: '为娃儿花钱是应该的，但不是啥子都要买。用不上的，买回来也堆到起。'
+  },
+
+  // ===== 投资心理（续）=====
+  {
+    id: 'gq_166', cat: '投资心理', icon: '🎰', title: '梭哈',
+    scene: '弟子{name}把全部家当押到一只票上，掌门劝他。他说：「押得重才翻得快。」',
+    options: [
+      { text: '有道理', ok: false },
+      { text: '梭哈是赌，不是投资。留一手，才走得远', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '全部压进去叫梭哈，是赌。留一手，跌了还能再起来，才走得远。'
+  },
+  {
+    id: 'gq_167', cat: '投资心理', icon: '💭', title: '隔壁老王',
+    scene: '弟子{name}说：「掌门，隔壁老王买那只票赚了两成，弟子也想跟着买。」',
+    options: [
+      { text: '跟着买就对了', ok: false },
+      { text: '老王啥时候买的、买了好多，你都不晓得', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '老王赚了两成，但他啥时候进的、投了好多，你都不晓得。跟风买，多半接在半山腰。'
+  },
+  {
+    id: 'gq_168', cat: '投资心理', icon: '📰', title: '听消息',
+    scene: '弟子{name}说：「掌门，弟子听人说某某票要涨。」掌门问他是哪个说的。他说：「街边上的人。」',
+    options: [
+      { text: '那就买', ok: false },
+      { text: '街边上的消息，等你听到，早就晚咯', ok: true },
+      { text: '小心点', ok: false }
+    ],
+    explain: '街边上传的，等你听到，多半已经晚咯。真有好消息，不会传到街边上。'
+  },
+  {
+    id: 'gq_169', cat: '投资心理', icon: '😤', title: '不服气',
+    scene: '弟子{name}亏了钱，说一定要"翻本"，把家底都拿出来接着搏。',
+    options: [
+      { text: '对，把本翻回来', ok: false },
+      { text: '越亏越想翻本，是最容易陷进去的时候', ok: true },
+      { text: '再搏一把', ok: false }
+    ],
+    explain: '越亏越想翻本，这是最危险的时候。停下来歇一口气，比啥子都强。'
+  },
+  {
+    id: 'gq_170', cat: '投资心理', icon: '🎯', title: '止损',
+    scene: '弟子{name}手里的东西跌了两成，掌门劝他割掉。他说：「再等等，说不定涨回来。」',
+    options: [
+      { text: '对，再等等', ok: false },
+      { text: '先想好跌到好多就走，别一路往下等', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '买之前就要想好：跌到好多就走。一路往下等，跌起来莫得底。'
+  },
+  {
+    id: 'gq_171', cat: '投资心理', icon: '🪞', title: '照镜子',
+    scene: '弟子{name}赚了钱，觉得自己本事大。掌门让他看看到底是本事还是运气。',
+    options: [
+      { text: '肯定是本事', ok: false },
+      { text: '行情好的时候，谁都能赚；要看行情差的时候', ok: true },
+      { text: '看个人', ok: false }
+    ],
+    explain: '行情好的时候，谁都能赚。要看行情差的时候还赚不赚得到，才晓得是不是真本事。'
+  },
+  {
+    id: 'gq_172', cat: '投资心理', icon: '⏸️', title: '空仓',
+    scene: '弟子{name}说：「掌门，弟子手里莫得票的时候，心头慌得很，总觉得错过了啥子。」',
+    options: [
+      { text: '那就随便买点', ok: false },
+      { text: '空仓也是一种状态，看不清楚的时候，不买就是最好的选择', ok: true },
+      { text: '多买点就不慌了', ok: false }
+    ],
+    explain: '手里空着，心头不慌才对。看不清楚的时候，不买就是最好的选择。'
+  },
+  {
+    id: 'gq_173', cat: '投资心理', icon: '📝', title: '记笔记',
+    scene: '弟子{name}买卖了好几年，问掌门咋个才能长进。',
+    options: [
+      { text: '多做几次就熟了', ok: false },
+      { text: '把每次买卖的理由记下来，隔段时间回头看', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '把每次买卖的理由记下来，过段时间回头看。对的在哪、错的在哪，自己就清楚了。'
+  },
+  {
+    id: 'gq_174', cat: '投资心理', icon: '👥', title: '跟风',
+    scene: '弟子{name}说：「掌门，街上都在买那只票，肯定有道理。」',
+    options: [
+      { text: '那赶紧买', ok: false },
+      { text: '人多的地方，往往是价贵的地方', ok: true },
+      { text: '看看再说', ok: false }
+    ],
+    explain: '人多的地方，价往往贵。等你跟进去，就是接盘的那个。'
+  },
+  {
+    id: 'gq_175', cat: '投资心理', icon: '🧠', title: '理性',
+    scene: '弟子{name}说：「掌门，弟子一看到红柱子就忍不住想买，一看到绿柱子就想卖。」',
+    options: [
+      { text: '这是本能', ok: false },
+      { text: '这是本能，但买卖要动脑子，不能跟着感觉走', ok: true },
+      { text: '跟着感觉走就对了', ok: false }
+    ],
+    explain: '看到红的想买、看到绿的想卖，是人人都有的本能。但买卖要动脑子，不能跟着感觉走。'
+  },
+  {
+    id: 'gq_176', cat: '投资心理', icon: '📊', title: '风险偏好',
+    scene: '弟子{name}问掌门，他适合买啥子样的东西。',
+    options: [
+      { text: '买涨得凶的', ok: false },
+      { text: '先看你睡得着觉不：亏好多你会失眠，就买比那更稳的', ok: true },
+      { text: '买别个推荐的', ok: false }
+    ],
+    explain: '先看自己：亏好多会睡不着？买比这个更稳的，才扛得住波动。'
+  },
+  {
+    id: 'gq_177', cat: '投资心理', icon: '⏳', title: '耐心',
+    scene: '弟子{name}买了三个月没动，急得团团转。掌门问他要不要换成别个。',
+    options: [
+      { text: '赶紧换', ok: false },
+      { text: '好的东西要拿得住，天天换只会越换越差', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '好东西要拿得住。天天换，光手续费就够你受的，还越换越差。'
+  },
+  {
+    id: 'gq_178', cat: '投资心理', icon: '🎓', title: '学费',
+    scene: '弟子{name}刚入市就亏了一笔，很沮丧。掌门安慰他。',
+    options: [
+      { text: '不干了', ok: false },
+      { text: '这一笔叫学费，学到东西，就不亏', ok: true },
+      { text: '再搏一把翻回来', ok: false }
+    ],
+    explain: '刚入市亏的一笔，叫学费。学到东西，就不亏。学不到，才是真亏。'
+  },
+  {
+    id: 'gq_179', cat: '投资心理', icon: '🌊', title: '潮水',
+    scene: '弟子{name}说：「掌门，涨潮的时候大家都赚钱，退潮的时候才看得到哪个没穿裤子。」',
+    options: [
+      { text: '说得对', ok: false },
+      { text: '就是这个理——涨潮谁都能赚，退潮才见真章', ok: true },
+      { text: '太悲观了', ok: false }
+    ],
+    explain: '潮水涨的时候，谁都能赚。退潮的时候，才看得到哪个是真有本事，哪个是光起屁股。'
+  },
+  {
+    id: 'gq_180', cat: '投资心理', icon: '🎭', title: '贪婪与恐惧',
+    scene: '弟子{name}说：「掌门，弟子发现一件事：别人怕的时候弟子也怕，别人贪的时候弟子也贪。」',
+    options: [
+      { text: '这是正常的', ok: false },
+      { text: '跟别个反着来，多半才对', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '大家都怕的时候，往往是机会；大家都贪的时候，往往是顶。跟别个反着来，多半才对。'
+  },
+
+  // ===== 宏观（续）=====
+  {
+    id: 'gq_181', cat: '宏观', icon: '🌐', title: '贸易战',
+    scene: '弟子{name}听人说海外跟我们打「贸易战」，问掌门这是啥子。',
+    options: [
+      { text: '是打仗', ok: false },
+      { text: '是两边互相加税，做买卖的都吃亏', ok: true },
+      { text: '是打官司', ok: false }
+    ],
+    explain: '贸易战就是两边互相加税，做买卖的都吃亏。最后买菜的老百姓也要多花钱。'
+  },
+  {
+    id: 'gq_182', cat: '宏观', icon: '📉', title: '通缩',
+    scene: '弟子{name}说：「掌门，最近啥子东西都在降价，这不是好事嘛？」',
+    options: [
+      { text: '是天大的好事', ok: false },
+      { text: '东西一直降价，说明买卖不景气，反而难办', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '东西一直降价，看着是好事，其实是买卖不景气。大家都不买，商号就关门，人就没得活干。'
+  },
+  {
+    id: 'gq_183', cat: '宏观', icon: '🏭', title: 'PMI',
+    scene: '弟子{name}听人说什么「PMI」，问掌门这是啥子。',
+    options: [
+      { text: '是个人名', ok: false },
+      { text: '是采购经理指数——看买卖景气不景气，五十为界', ok: true },
+      { text: '是税', ok: false }
+    ],
+    explain: 'PMI 是问各家做买卖的，看他们觉得景气不景气。五十以上是兴旺，以下是冷清。'
+  },
+  {
+    id: 'gq_184', cat: '宏观', icon: '🌾', title: 'PPI',
+    scene: '弟子{name}听人说「PPI」涨了，问掌门这是啥子意思。',
+    options: [
+      { text: '是粮价', ok: false },
+      { text: '是工厂出货的价钱，涨了说明成本在涨', ok: true },
+      { text: '是股市', ok: false }
+    ],
+    explain: 'PPI 是工厂出货的价钱。这个数一涨，说明厂里的成本在涨，后头多半要传到菜价上去。'
+  },
+  {
+    id: 'gq_185', cat: '宏观', icon: '💵', title: '外汇储备',
+    scene: '弟子{name}听说朝廷有一大笔「外汇储备」，问掌门这是干啥子的。',
+    options: [
+      { text: '是朝廷的金库', ok: false },
+      { text: '是朝廷存的海外钱，用来稳汇率、付账', ok: true },
+      { text: '是给官家花的', ok: false }
+    ],
+    explain: '外汇储备是朝廷存的海外钱。用来稳汇率、付海外的账，碰到大事的时候顶用。'
+  },
+  {
+    id: 'gq_186', cat: '宏观', icon: '🏛️', title: '央行',
+    scene: '弟子{name}问：「掌门，都说朝廷里头有个『央行』，它跟寻常钱庄有啥子不一样？」',
+    options: [
+      { text: '一样的', ok: false },
+      { text: '央行是钱庄的钱庄，管印钱、定利息', ok: true },
+      { text: '是官家开的钱庄', ok: false }
+    ],
+    explain: '央行是钱庄的钱庄，管印钱、定利息，管到所有的钱庄。它一动，全城都要动。'
+  },
+  {
+    id: 'gq_187', cat: '宏观', icon: '📊', title: '利率',
+    scene: '弟子{name}说：「掌门，弟子听说朝廷要把利息降一点，这跟弟子有啥子关系？」',
+    options: [
+      { text: '莫得关系', ok: false },
+      { text: '降息了，存钱利钱少，借钱便宜，房子可能涨', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '降息了，存钱的利钱变少，借钱的便宜。买房、做买卖的人更容易借到钱。'
+  },
+  {
+    id: 'gq_188', cat: '宏观', icon: '🌊', title: '逆周期',
+    scene: '弟子{name}听人说朝廷在「逆周期调节」，问掌门这是啥子。',
+    options: [
+      { text: '是逆着来', ok: false },
+      { text: '是买卖热的时候收一收，冷的时候放一放', ok: true },
+      { text: '是看运气', ok: false }
+    ],
+    explain: '逆周期就是买卖太热的时候收一收，太冷的时候放一放，让日子走得稳些。'
+  },
+  {
+    id: 'gq_189', cat: '宏观', icon: '📜', title: '两会',
+    scene: '弟子{name}听人说朝廷每年开「两会」，问掌门那是不是商量国事的。',
+    options: [
+      { text: '不是', ok: false },
+      { text: '是，商量国事，定下一年的方向', ok: true },
+      { text: '是走个过场', ok: false }
+    ],
+    explain: '两会就是朝廷商量国事，定下一年的方向。出来的时候，多少会影响买卖。'
+  },
+  {
+    id: 'gq_190', cat: '宏观', icon: '🌾', title: '粮食',
+    scene: '弟子{name}问：「掌门，朝廷为啥子这么看重粮食？」',
+    options: [
+      { text: '粮食好吃', ok: false },
+      { text: '粮食是根基，粮价一乱，啥子都要跟着乱', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '粮食是根基。粮价一乱，菜价、肉价、工钱全都要跟着乱，所以朝廷死死盯住。'
+  },
+
+  // ===== 股票（再续）=====
+  {
+    id: 'gq_191', cat: '股票', icon: '🎯', title: '涨跌停',
+    scene: '弟子{name}问：「掌门，为啥子有时候一只票一天最多只动一成，有时候又能动两成？」',
+    options: [
+      { text: '没区别', ok: false },
+      { text: '主板一成，创业板、科创板两成，看是哪种', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '主板一天最多动一成，创业板和科创板动两成。ST 的动半成。'
+  },
+  {
+    id: 'gq_192', cat: '股票', icon: '💼', title: '券商',
+    scene: '弟子{name}问：「掌门，弟子要买票，找哪个？」',
+    options: [
+      { text: '找钱庄', ok: false },
+      { text: '找券商——是专门做这个的场子', ok: true },
+      { text: '找衙门', ok: false }
+    ],
+    explain: '买票要找券商，是专门做这个的场子。钱庄多半只做存贷，不做这个。'
+  },
+  {
+    id: 'gq_193', cat: '股票', icon: '📊', title: 'K 线',
+    scene: '弟子{name}问：「掌门，墙上那根红红绿绿的柱子，到底看啥子？」',
+    options: [
+      { text: '看颜色就够了', ok: false },
+      { text: '看四样：开盘、收盘、最高、最低', ok: true },
+      { text: '看长短', ok: false }
+    ],
+    explain: '一根 K 线，看四样：开盘的价、收盘的价、当天最高的价、当天最低的价。'
+  },
+  {
+    id: 'gq_194', cat: '股票', icon: '🚀', title: '庄家',
+    scene: '弟子{name}问：「掌门，听说有『庄家』，庄家是啥子？」',
+    options: [
+      { text: '是做庄的', ok: false },
+      { text: '是手里票多、能翻手为云的大户', ok: true },
+      { text: '是官家', ok: false }
+    ],
+    explain: '庄家就是手里票多的大户，一买一卖都能带动行情。散户斗不过，莫跟到赌。'
+  },
+  {
+    id: 'gq_195', cat: '股票', icon: '🛒', title: '打新',
+    scene: '弟子{name}听说申购新上市商号的票能赚，问掌门咋个弄。',
+    options: [
+      { text: '随便申', ok: false },
+      { text: '打新要有老票垫底，中不中要看运气', ok: true },
+      { text: '是骗局', ok: false }
+    ],
+    explain: '打新就是申购新上市的票。要有老票垫底，中不中看运气。中了多半赚，也可能亏。'
+  },
+  {
+    id: 'gq_196', cat: '股票', icon: '💵', title: '送股',
+    scene: '弟子{name}手里的商号送股了，弟子高兴得跳。掌门让他先看一眼股价。',
+    options: [
+      { text: '送股就是白赚', ok: false },
+      { text: '送股后股价要下调，总资产没变', ok: true },
+      { text: '赚大了', ok: false }
+    ],
+    explain: '送股之后股价要相应下调。你手里的股数多了，但每一股便宜了，总资产没变。'
+  },
+  {
+    id: 'gq_197', cat: '股票', icon: '🏛️', title: '增发',
+    scene: '弟子{name}手里的商号说要「增发新股」，问掌门这是好事还是坏事。',
+    options: [
+      { text: '是好事', ok: false },
+      { text: '是商号再拿股票换钱，股本变大，对老股东多半是摊薄', ok: true },
+      { text: '是坏事', ok: false }
+    ],
+    explain: '增发就是商号再拿股票换钱。股本大了，老股东手里的股占比就变小，多半是摊薄。'
+  },
+  {
+    id: 'gq_198', cat: '股票', icon: '🛡️', title: '退市',
+    scene: '弟子{name}的票突然说「退市」，弟子慌了，问掌门钱还能不能拿回来。',
+    options: [
+      { text: '一分不剩', ok: false },
+      { text: '会先摘牌，之后进老三板交易，多半拿不回本钱', ok: true },
+      { text: '能全退', ok: false }
+    ],
+    explain: '退市是摘下牌子，之后进老三板慢慢交易。多半拿不回本钱，所以要躲开风险大的票。'
+  },
+  {
+    id: 'gq_199', cat: '股票', icon: '💰', title: '股息率',
+    scene: '弟子{name}问：「掌门，咋个看一只票分不分得划算？」',
+    options: [
+      { text: '看分红多少', ok: false },
+      { text: '算股息率——每股分红除以股价', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '股息率是每股分红除以股价。这个数越高，说明分红相对股价越划算。'
+  },
+  {
+    id: 'gq_200', cat: '股票', icon: '🔍', title: '基本面',
+    scene: '弟子{name}问掌门：「买票到底看啥子？」',
+    options: [
+      { text: '看行情', ok: false },
+      { text: '先看商号的底子——赚不赚钱、欠不欠债', ok: true },
+      { text: '看别人买啥子', ok: false }
+    ],
+    explain: '买票要先看商号的底子：赚不赚钱、欠不欠债、有没有前途。这叫基本面。'
+  },
+
+  // ===== 基金（再续）=====
+  {
+    id: 'gq_201', cat: '基金', icon: '🏦', title: '托管',
+    scene: '弟子{name}问：「掌门，弟子把钱交给基金打理，万一他跑路了咋个办？」',
+    options: [
+      { text: '只能认倒霉', ok: false },
+      { text: '钱由第三方托管，基金公司动不了', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '基金的钱由第三方托管，基金管理的人只动得了投资，动不了你的本金。跑了也没用。'
+  },
+  {
+    id: 'gq_202', cat: '基金', icon: '📊', title: '风格',
+    scene: '弟子{name}问：「掌门，弟子看两只基金，名字都差不多，为啥子涨跌差这么多？」',
+    options: [
+      { text: '一样的', ok: false },
+      { text: '看它买的是啥——价值风格、成长风格，走的不是一条路', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '基金看它买啥子。有的买稳当的大商号，有的买冒尖的新商号。走的不是一条路。'
+  },
+  {
+    id: 'gq_203', cat: '基金', icon: '💰', title: '分红方式',
+    scene: '弟子{name}的基金分红，钱庄问他要「现金分红」还是「红利再投」，弟子不懂。',
+    options: [
+      { text: '随便选', ok: false },
+      { text: '要现钱用就选现金，想接着赚就选再投', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '现金分红是拿现钱，红利再投是拿去买更多份额。要用钱就选现金，想接着赚就选再投。'
+  },
+  {
+    id: 'gq_204', cat: '基金', icon: '🎯', title: '主动被动',
+    scene: '弟子{name}问：「掌门，主动基金和被动基金有啥子区别？」',
+    options: [
+      { text: '一样的', ok: false },
+      { text: '主动的靠人挑，被动的跟到指数走', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '主动基金靠人挑票，想跑赢大盘。被动基金跟到指数走，不求跑赢，只求跟得上。'
+  },
+  {
+    id: 'gq_205', cat: '基金', icon: '📈', title: '牛市熊市',
+    scene: '弟子{name}问：「掌门，啥子叫牛市啥子叫熊市？」',
+    options: [
+      { text: '看动物', ok: false },
+      { text: '一直涨的叫牛市，一直跌的叫熊市', ok: true },
+      { text: '看天气', ok: false }
+    ],
+    explain: '一直涨的行情叫牛市，一直跌的叫熊市。牛往顶上顶，熊往底下扑。'
+  },
+  {
+    id: 'gq_206', cat: '基金', icon: '🔄', title: '定投频率',
+    scene: '弟子{name}问：「掌门，定投是每个月投好，还是每周投好？」',
+    options: [
+      { text: '随便', ok: false },
+      { text: '按月按周都行，关键是长期不断', ok: true },
+      { text: '看行情', ok: false }
+    ],
+    explain: '按月按周都行，差别不大。关键是长期坚持，断了就莫得意思咯。'
+  },
+  {
+    id: 'gq_207', cat: '基金', icon: '🏢', title: '基金公司',
+    scene: '弟子{name}问：「掌门，选基金要不要看哪家基金公司？」',
+    options: [
+      { text: '不用看', ok: false },
+      { text: '要看——大公司、老团队，多半更稳当', ok: true },
+      { text: '看名字好不好听', ok: false }
+    ],
+    explain: '基金公司要看：大不大、老不老、团队稳不稳。名不见经传的，多留个心眼。'
+  },
+  {
+    id: 'gq_208', cat: '基金', icon: '💼', title: 'FOF',
+    scene: '弟子{name}看到一只基金叫「FOF」，问掌门这是啥子。',
+    options: [
+      { text: '是外国人', ok: false },
+      { text: '是"基金中的基金"——它不买票，买别的基金', ok: true },
+      { text: '是骗人的', ok: false }
+    ],
+    explain: 'FOF 是拿钱去买别的基金，层层分散。好处是稳，坏处是费用叠了两层。'
+  },
+  {
+    id: 'gq_209', cat: '基金', icon: '📉', title: '赎回费',
+    scene: '弟子{name}买基金才半个月就想赎，一看赎回费贵得吓人。',
+    options: [
+      { text: '是钱庄黑', ok: false },
+      { text: '赎回费按持的时间算，持得越短越贵', ok: true },
+      { text: '是算错了', ok: false }
+    ],
+    explain: '赎回费按持的时间算：持得越短越贵，持得越久越便宜。逼你拿久点。'
+  },
+  {
+    id: 'gq_210', cat: '基金', icon: '🧮', title: '仓位',
+    scene: '弟子{name}问：「掌门，弟子买了基金，是不是把钱全压上去最好？」',
+    options: [
+      { text: '全压上', ok: false },
+      { text: '分批进去，留点余地，才扛得住波动', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '钱一次全压上去，跌了就没子弹咯。分批进去，留点余地，才扛得住。'
+  },
+
+  // ===== 债券（再续）=====
+  {
+    id: 'gq_211', cat: '债券', icon: '🏛️', title: '地方政府债',
+    scene: '弟子{name}听说州府也发债，问掌门跟朝廷的债有啥子区别。',
+    options: [
+      { text: '一样的', ok: false },
+      { text: '州府的债也是朝廷背书，但等级比国债低一点', ok: true },
+      { text: '是骗人的', ok: false }
+    ],
+    explain: '州府的债也有朝廷背书，但等级比国债低一点，利钱也高一点。'
+  },
+  {
+    id: 'gq_212', cat: '债券', icon: '⚖️', title: '违约',
+    scene: '弟子{name}手里一张商号的债，到期没还上，问掌门咋个办。',
+    options: [
+      { text: '算了', ok: false },
+      { text: '这叫违约——可以走衙门，但多半追不回来多少', ok: true },
+      { text: '莫得办法', ok: false }
+    ],
+    explain: '到期没还上叫违约。可以走衙门追，但多半追不回多少。买之前要看商号的底子。'
+  },
+  {
+    id: 'gq_213', cat: '债券', icon: '🔄', title: '债基',
+    scene: '弟子{name}问：「掌门，弟子不想一张一张买债，有没有简单点的法子？」',
+    options: [
+      { text: '莫得', ok: false },
+      { text: '有，买债券基金，一篮子债一次搞定', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '买债券基金就是一篮子债一次搞定。省事，风险也散开了。'
+  },
+  {
+    id: 'gq_214', cat: '债券', icon: '📊', title: '短债长债',
+    scene: '弟子{name}问：「掌门，债也有长短之分？」',
+    options: [
+      { text: '没区别', ok: false },
+      { text: '有——短债稳当，长债利钱高但波动大', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '短债稳当，利钱少。长债利钱高，但利钱一动，价就动得凶。'
+  },
+  {
+    id: 'gq_215', cat: '债券', icon: '🌐', title: '美元债',
+    scene: '弟子{name}听说有商号发「美元债」，问掌门这是啥子。',
+    options: [
+      { text: '是骗人的', ok: false },
+      { text: '是拿美元借的债，还要担汇率的风险', ok: true },
+      { text: '跟我们莫得关系', ok: false }
+    ],
+    explain: '美元债是拿美元借的。利钱可能高些，但汇率一波动，赚的亏的都放大。'
+  },
+  {
+    id: 'gq_216', cat: '债券', icon: '📈', title: '债牛',
+    scene: '弟子{name}听说「债牛」来了，问掌门这是啥子。',
+    options: [
+      { text: '是牛的牛市', ok: false },
+      { text: '是债的行情好——利钱在跌，债在涨', ok: true },
+      { text: '是骗人的', ok: false }
+    ],
+    explain: '债牛就是利钱在跌，债价在涨。跟股牛一样，都是行情好的意思。'
+  },
+  {
+    id: 'gq_217', cat: '债券', icon: '💰', title: '利钱',
+    scene: '弟子{name}问：「掌门，债的利钱是从哪来的？」',
+    options: [
+      { text: '天上掉的', ok: false },
+      { text: '是借债的人付的——他借了你的钱，就要付利钱', ok: true },
+      { text: '是朝廷发的', ok: false }
+    ],
+    explain: '债的利钱是借债的人付的。他借了你的钱去用，就要按约定付你利钱。'
+  },
+  {
+    id: 'gq_218', cat: '债券', icon: '🏦', title: '债评级',
+    scene: '弟子{name}手里一张债，听说评级被下调了，问掌门要不要慌。',
+    options: [
+      { text: '不用慌', ok: false },
+      { text: '要慌——评级下调说明还钱的风险大了', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '评级下调说明它还钱的风险大了。手里有这种债，要多留个心眼。'
+  },
+
+  // ===== 反诈（再续）=====
+  {
+    id: 'gq_219', cat: '反诈', icon: '💳', title: '套现',
+    scene: '弟子{name}被人拉去「帮忙套现」，说只要刷一下卡，就能拿一笔好处。',
+    options: [
+      { text: '这钱好赚', ok: false },
+      { text: '是违法的——套现可能被用来洗钱', ok: true },
+      { text: '小玩一下', ok: false }
+    ],
+    explain: '套现是违法的，还可能被用来洗钱。刷了这一次，往后麻烦跟着来。'
+  },
+  {
+    id: 'gq_220', cat: '反诈', icon: '🏧', title: '假 ATM',
+    scene: '弟子{name}在一处偏僻地方取钱，发现机器怪怪的，插卡的地方比寻常多出一块。',
+    options: [
+      { text: '照用不误', ok: false },
+      { text: '可能是改过的机器，赶紧走，换一处取', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '插卡口多出一块，可能是骗子装的东西，专门偷卡的信息。换一处取。'
+  },
+  {
+    id: 'gq_221', cat: '反诈', icon: '📱', title: '验证码',
+    scene: '弟子{name}接到电话，对方说帮他处理问题，要他念一下刚收到的验证码。',
+    options: [
+      { text: '念给他', ok: false },
+      { text: '验证码是最后一道防线，任何人都不念', ok: true },
+      { text: '念一半', ok: false }
+    ],
+    explain: '验证码是最后一道防线。不管对方说他是哪个，验证码都不念。'
+  },
+  {
+    id: 'gq_222', cat: '反诈', icon: '🎁', title: '免费领',
+    scene: '弟子{name}看到街边一个摊子，说扫码免费领东西。弟子差点就扫了。',
+    options: [
+      { text: '扫就扫', ok: false },
+      { text: '莫扫——不明来源的码，扫了可能泄露信息', ok: true },
+      { text: '小心点', ok: false }
+    ],
+    explain: '不明来源的码莫扫。贪这几毛的便宜，泄的可能是一辈子的信息。'
+  },
+  {
+    id: 'gq_223', cat: '反诈', icon: '💼', title: '兼职',
+    scene: '弟子{name}看到一个兼职，说交押金就能上岗，干得好还能退。',
+    options: [
+      { text: '交就交', ok: false },
+      { text: '正规招工不收押金，先交钱的多半是坑', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '正规招工不收押金。先交钱再上岗的，多半是坑，押金要不回来。'
+  },
+  {
+    id: 'gq_224', cat: '反诈', icon: '🚪', title: '上门推销',
+    scene: '弟子{name}家里来了个人，说是来检查天然气的，要进屋看看。',
+    options: [
+      { text: '让他进', ok: false },
+      { text: '先打电话核实，不认得的莫开门', ok: true },
+      { text: '看穿着', ok: false }
+    ],
+    explain: '上门推销、检查的，先打电话核实。不认得的，莫轻易开门。'
+  },
+  {
+    id: 'gq_225', cat: '反诈', icon: '🏆', title: '中奖短信',
+    scene: '弟子{name}收到短信，说他中了大奖，点链接填信息就能领。',
+    options: [
+      { text: '赶紧填', ok: false },
+      { text: '是骗局——中奖莫得先填信息的', ok: true },
+      { text: '填一半', ok: false }
+    ],
+    explain: '中奖莫得先填信息的。填了信息，就等着被人拿去骗下一回。'
+  },
+  {
+    id: 'gq_226', cat: '反诈', icon: '💊', title: '保健品',
+    scene: '弟子{name}的奶奶被人推销一种「神药」，说包治百病。',
+    options: [
+      { text: '买给奶奶', ok: false },
+      { text: '包治百病的都是假的，带奶奶看正经医生', ok: true },
+      { text: '试试也无妨', ok: false }
+    ],
+    explain: '包治百病的都是假的。钱花了是小事，耽误看病才是大事。带奶奶去看正经医生。'
+  },
+
+  // ===== 基础理财（再续）=====
+  {
+    id: 'gq_227', cat: '基础理财', icon: '🎯', title: '财务自由',
+    scene: '弟子{name}问：「掌门，大家都说『财务自由』，那到底是啥子？」',
+    options: [
+      { text: '是有好多钱', ok: false },
+      { text: '是不用为吃饭去干活——被动收入盖得住日常开支', ok: true },
+      { text: '是不上班', ok: false }
+    ],
+    explain: '财务自由不是钱好多，是每天挣的被动收入盖得住日常开支，不用为吃饭去干活。'
+  },
+  {
+    id: 'gq_228', cat: '基础理财', icon: '📚', title: '学习',
+    scene: '弟子{name}问：「掌门，弟子莫得钱，想学理财，从哪儿开始？」',
+    options: [
+      { text: '等有钱再说', ok: false },
+      { text: '先学记账，把日常收支搞明白', ok: true },
+      { text: '先买本股市书', ok: false }
+    ],
+    explain: '没钱也能学。先学记账，搞明白自己钱跑哪去了，这是第一步。'
+  },
+  {
+    id: 'gq_229', cat: '基础理财', icon: '💼', title: '风险',
+    scene: '弟子{name}问：「掌门，弟子不想担风险，能不能只赚不亏？」',
+    options: [
+      { text: '可以', ok: false },
+      { text: '莫得——想有收益就有风险，天下莫得白赚的事', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '想有收益就有风险。跟你说稳赚不赔的，多半是盯到你的本钱。'
+  },
+  {
+    id: 'gq_230', cat: '基础理财', icon: '📊', title: '资产配置',
+    scene: '弟子{name}问：「掌门，弟子有点毛，全买一种好不？」',
+    options: [
+      { text: '全买一种', ok: false },
+      { text: '分成几份，稳的、活的、搏的各放一点', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '分成几份：稳的、活的、搏的各放一点。一种全压，跌了就莫得退路。'
+  },
+  {
+    id: 'gq_231', cat: '基础理财', icon: '💰', title: '记账',
+    scene: '弟子{name}问：「掌门，弟子记了三个月账，可还是不攒钱，问题在哪？」',
+    options: [
+      { text: '记账莫得用', ok: false },
+      { text: '记完要回头看——哪几笔不该花，下个月改', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '记账不是记完就算，要回头看。看到哪几笔不该花，下个月改，才叫记账。'
+  },
+  {
+    id: 'gq_232', cat: '基础理财', icon: '🎯', title: '遗产',
+    scene: '弟子{name}问：「掌门，弟子有点家底，想给娃儿留点，咋个留最稳当？」',
+    options: [
+      { text: '全留现钱', ok: false },
+      { text: '立个遗嘱，免得后人扯皮', ok: true },
+      { text: '随便', ok: false }
+    ],
+    explain: '家底想留给后人，先立个遗嘱。免得老人一走，家里为这点东西扯皮。'
+  },
+
+  // ===== 银行存款（再续）=====
+  {
+    id: 'gq_233', cat: '银行存款', icon: '🏦', title: '大额存单门槛',
+    scene: '弟子{name}听说大额存单利钱高，跑去买，人家说他钱不够。',
+    options: [
+      { text: '钱庄小气', ok: false },
+      { text: '大额存单有门槛，一般要二十万毛起', ok: true },
+      { text: '是骗人的', ok: false }
+    ],
+    explain: '大额存单门槛高，一般二十万毛起。够得着就买，够不着就买寻常定期的。'
+  },
+  {
+    id: 'gq_234', cat: '银行存款', icon: '💧', title: '存款利息',
+    scene: '弟子{name}问：「掌门，钱庄的利钱，为啥子比借钱的少那么多？」',
+    options: [
+      { text: '是钱庄贪心', ok: false },
+      { text: '钱庄借钱庄的钱，转手借给别人，赚的就是这个差', ok: true },
+      { text: '是算错了', ok: false }
+    ],
+    explain: '钱庄借你的钱利钱低，转手借给别人利钱高，赚的就是这个差。'
+  },
+  {
+    id: 'gq_235', cat: '银行存款', icon: '🏛️', title: '国债',
+    scene: '弟子{name}听说买国债最稳，问掌门咋个买。',
+    options: [
+      { text: '买不到', ok: false },
+      { text: '钱庄就能买，门槛低，利钱比定存高点', ok: true },
+      { text: '要去京城', ok: false }
+    ],
+    explain: '国债在钱庄就能买，门槛低，利钱比寻常定存高一点。稳当，适合不想操心的。'
+  },
+  {
+    id: 'gq_236', cat: '银行存款', icon: '💰', title: '定期利率',
+    scene: '弟子{name}问：「掌门，为啥子存三年、五年，利钱反而一样？」',
+    options: [
+      { text: '是钱庄黑', ok: false },
+      { text: '钱庄也得算自己赚不赚——利钱是各方博弈出来的', ok: true },
+      { text: '是算错了', ok: false }
+    ],
+    explain: '钱庄也得算自己赚不赚。三年五年利钱一样，说明钱庄觉得长期利钱涨不上去。'
+  },
+  {
+    id: 'gq_237', cat: '银行存款', icon: '📋', title: '结构性存款',
+    scene: '弟子{name}问：「掌门，为啥子结构性存款有时候利钱特别高，有时候又特别低？」',
+    options: [
+      { text: '是钱庄骗人', ok: false },
+      { text: '因为它挂钩某样东西——那样东西好它就高，不好就低', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '结构性存款挂钩某样东西，那样东西好，它利钱就高；那样东西差，它利钱就低。'
+  },
+
+  // ===== 保险（再续）=====
+  {
+    id: 'gq_238', cat: '保险', icon: '💊', title: '重疾险保额',
+    scene: '弟子{name}问：「掌门，重疾险该买好大的保额？」',
+    options: [
+      { text: '随便', ok: false },
+      { text: '按你治病、养家要好多来算，一般三年收入', ok: true },
+      { text: '越多越好', ok: false }
+    ],
+    explain: '重疾险保额按你治病、养家要好多来算。一般三年收入，够治病也够养家。'
+  },
+  {
+    id: 'gq_239', cat: '保险', icon: '👴', title: '给老人买',
+    scene: '弟子{name}想给爹买重疾险，人家说年纪大了不好买。弟子不解。',
+    options: [
+      { text: '是人家耍赖', ok: false },
+      { text: '年纪越大，生病风险越高，保费就贵，还可能不给保', ok: true },
+      { text: '是弟子钱少', ok: false }
+    ],
+    explain: '年纪越大，生病风险越高，保费就贵，有的直接不给保。保险要趁早买。'
+  },
+  {
+    id: 'gq_240', cat: '保险', icon: '👶', title: '给娃买',
+    scene: '弟子{name}问：「掌门，弟子的娃儿，该先买哪样保险？」',
+    options: [
+      { text: '随便', ok: false },
+      { text: '先意外、再医疗、再重疾，按这个顺序来', ok: true },
+      { text: '先买贵的', ok: false }
+    ],
+    explain: '给娃买保险，按顺序：先意外、再医疗、再重疾。钱不够就按这个来。'
+  },
+  {
+    id: 'gq_241', cat: '保险', icon: '🚗', title: '车险',
+    scene: '弟子{name}买了辆车，问掌门车险该咋个买。',
+    options: [
+      { text: '只买最便宜的', ok: false },
+      { text: '交强险必买，商业险看情况——第三者、车损是大头', ok: true },
+      { text: '随便', ok: false }
+    ],
+    explain: '交强险是官家定的，必买。商业险里，第三者责任险和车损险最重要。'
+  },
+  {
+    id: 'gq_242', cat: '保险', icon: '📋', title: '保险合同',
+    scene: '弟子{name}买保险，人家给他一本厚厚的合同，他不想看。',
+    options: [
+      { text: '不用看', ok: false },
+      { text: '要看——特别是"保啥子"和"不保啥子"两段', ok: true },
+      { text: '让别个看', ok: false }
+    ],
+    explain: '合同里最要紧的是"保啥子"和"不保啥子"。这两段不看，买了也白买。'
+  },
+
+  // ===== 房产税务（再续）=====
+  {
+    id: 'gq_243', cat: '房产税务', icon: '🏠', title: '租房',
+    scene: '弟子{name}想租房，问掌门签合同要注意啥子。',
+    options: [
+      { text: '随便签', ok: false },
+      { text: '要看租期、押金、违约条款，白纸黑字', ok: true },
+      { text: '口头说好就行', ok: false }
+    ],
+    explain: '租房要白纸黑字写清楚：租期、押金、违约咋办。口头说的，翻脸就不认。'
+  },
+  {
+    id: 'gq_244', cat: '房产税务', icon: '🏛️', title: '房产税',
+    scene: '弟子{name}听说朝廷要开征「房产税」，问掌门这是啥子。',
+    options: [
+      { text: '是买房交的税', ok: false },
+      { text: '是持有房子每年要交的税，目前只在少数地方试点', ok: true },
+      { text: '是谣言', ok: false }
+    ],
+    explain: '房产税是持有房子每年要交的税。跟买房时交的契税不一样。目前只在少数地方试点。'
+  },
+  {
+    id: 'gq_245', cat: '房产税务', icon: '🏠', title: '限购',
+    scene: '弟子{name}想买房，人家说他不符合「限购」。弟子不解。',
+    options: [
+      { text: '是人家耍赖', ok: false },
+      { text: '限购是朝廷限制买房的资格——户口、社保这些', ok: true },
+      { text: '是弟子的钱不够', ok: false }
+    ],
+    explain: '限购是朝廷限制买房的资格。户口、社保交了好多年、名下有几套房，都要看。'
+  },
+  {
+    id: 'gq_246', cat: '房产税务', icon: '💰', title: '公积金',
+    scene: '弟子{name}问：「掌门，弟子每个月的工钱被扣了一笔『公积金』，这是干啥子的？」',
+    options: [
+      { text: '是税', ok: false },
+      { text: '是给你存着买房、租房的，你自己也能用', ok: true },
+      { text: '是白扣的', ok: false }
+    ],
+    explain: '公积金是给你存着买房、租房用的。你自己一份、东家一份，都是你的。'
+  },
+  {
+    id: 'gq_247', cat: '房产税务', icon: '📜', title: '购房合同',
+    scene: '弟子{name}买房，要签一摞合同，看得头昏。掌门问他看没看交房日期和违约条款。',
+    options: [
+      { text: '没看', ok: false },
+      { text: '要细看交房日期、违约条款、面积差异这些', ok: true },
+      { text: '看名字就行', ok: false }
+    ],
+    explain: '买房合同要细看：啥时候交房、违约咋办、面积多了少了好多算。这几样最容易扯皮。'
+  },
+  {
+    id: 'gq_248', cat: '房产税务', icon: '🏦', title: 'LPR 加点',
+    scene: '弟子{name}问：「掌门，弟子听说房贷是『LPR 加点』，那个点能不能改？」',
+    options: [
+      { text: '能随便改', ok: false },
+      { text: 'LPR 会动，加点部分一般签了就不变', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: 'LPR 会跟着行情动，加点那部分一般签了就不变。签的时候要多比较几家。'
+  },
+  {
+    id: 'gq_249', cat: '房产税务', icon: '🏛️', title: '二手房',
+    scene: '弟子{name}想买二手房，问掌门要注意啥子。',
+    options: [
+      { text: '看价钱就行', ok: false },
+      { text: '要看房本清不清楚、有没有抵押、税费谁出', ok: true },
+      { text: '看装修', ok: false }
+    ],
+    explain: '二手房要看三样：房本清不清楚、有没有抵押、税费谁出。装修是次要的。'
+  },
+  {
+    id: 'gq_250', cat: '房产税务', icon: '💰', title: '以租养贷',
+    scene: '弟子{name}想借钱买套房，租出去用租金还贷。问掌门这个想法行不行。',
+    options: [
+      { text: '肯定行', ok: false },
+      { text: '要看租得起好多、贷得起好多，两头差太远就危险', ok: true },
+      { text: '是骗人的', ok: false }
+    ],
+    explain: '以租养贷要看租金够不够还贷。租金够不上月供，就得自己补，缺口大了要出事。'
+  },
+
+  // ===== 基础理财（收尾）=====
+  {
+    id: 'gq_251', cat: '基础理财', icon: '💰', title: '借钱给亲戚',
+    scene: '弟子{name}的舅舅来借钱，说好三个月还，可弟子听说他爱赌。弟子拿不定主意。',
+    options: [
+      { text: '亲戚一场，借', ok: false },
+      { text: '沾赌的钱，借出去多半回不来，要慎重', ok: true },
+      { text: '借一半', ok: false }
+    ],
+    explain: '沾赌的钱，借出去多半肉包子打狗。亲戚一场，也要看他还得上不。'
+  },
+  {
+    id: 'gq_252', cat: '基础理财', icon: '🎯', title: '先还债还是先投资',
+    scene: '弟子{name}手里有点毛，又想还债，又想拿去搏一搏。问掌门先做哪个。',
+    options: [
+      { text: '先搏，赚了再还', ok: false },
+      { text: '先还债——还债的"收益"是省下的利息，最稳当', ok: true },
+      { text: '各分一半', ok: false }
+    ],
+    explain: '先还债。还债省的利钱，是最稳的收益，比搏一把把稳。'
+  },
+  {
+    id: 'gq_253', cat: '基础理财', icon: '📊', title: '赚多少够',
+    scene: '弟子{name}问：「掌门，弟子做买卖，赚好多才叫够？」',
+    options: [
+      { text: '越多越好', ok: false },
+      { text: '要能盖过物价涨幅，还能有点剩下，才算够', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '赚的钱，先要盖过物价涨的那部分。剩下来的，才叫真赚的。'
+  },
+  {
+    id: 'gq_254', cat: '基础理财', icon: '📚', title: '学不会',
+    scene: '弟子{name}说：「掌门，弟子愚钝，学不会理财。」',
+    options: [
+      { text: '那就算了', ok: false },
+      { text: '先学一件事：不乱花。别的慢慢来', ok: true },
+      { text: '看天赋', ok: false }
+    ],
+    explain: '学不会深的不要紧。先学一件事：不乱花。光这一点，就够用了。'
+  },
+  {
+    id: 'gq_255', cat: '基础理财', icon: '🏆', title: '财富观',
+    scene: '弟子{name}问：「掌门，弟子到底该咋个看钱？」',
+    options: [
+      { text: '钱越多越好', ok: false },
+      { text: '钱是手段不是目的——是为过日子，不是日子为钱', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '钱是手段，不是目的。是为了过日子过得舒服，不是把日子过成攒钱。'
+
+  },
+
+  // ===== 银行存款（收尾）=====
+  {
+    id: 'gq_256', cat: '银行存款', icon: '🏦', title: '三张存单',
+    scene: '弟子{name}问：「掌门，弟子有一笔毛，该一次存三年，还是分成三张存？」',
+    options: [
+      { text: '一次存三年', ok: false },
+      { text: '分成几张，到期时间错开，急用钱时不慌', ok: true },
+      { text: '随便', ok: false }
+    ],
+    explain: '分成几张，到期时间错开。急用钱的时候，取一张就够，别的利息不动。'
+  },
+  {
+    id: 'gq_257', cat: '银行存款', icon: '💰', title: '信用卡',
+    scene: '弟子{name}问：「掌门，弟子办了好几张信用卡，这是好事不？」',
+    options: [
+      { text: '越多越好', ok: false },
+      { text: '两三张够用就行，多了容易乱花钱', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '信用卡两三张够用就行。多了，这里刷一点那里刷一点，自己都搞不清花了好多。'
+  },
+  {
+    id: 'gq_258', cat: '银行存款', icon: '💸', title: '存哪里',
+    scene: '弟子{name}问：「掌门，钱存哪家钱庄好？」',
+    options: [
+      { text: '哪家高存哪家', ok: false },
+      { text: '大钱庄稳当，小钱庄利钱高，各有各的取舍', ok: true },
+      { text: '看名字', ok: false }
+    ],
+    explain: '大钱庄稳，小钱庄利钱高。要稳就大，要利就小，但小钱庄万一倒了，就只能等存款保险。'
+  },
+  {
+    id: 'gq_259', cat: '银行存款', icon: '📋', title: '存折',
+    scene: '弟子{name}问：「掌门，钱庄给的存折，弟子该收好不？」',
+    options: [
+      { text: '扔了算了', ok: false },
+      { text: '收好——上面有账号、密码提示，被人捡到要出事', ok: true },
+      { text: '随便放', ok: false }
+    ],
+    explain: '存折上有账号、密码提示。被人捡到，麻烦跟着来。要收好。'
+  },
+  {
+    id: 'gq_260', cat: '银行存款', icon: '🔐', title: '密码',
+    scene: '弟子{name}把存折密码设成生日，掌门让他改。弟子说：「生日好记。」',
+    options: [
+      { text: '好记就行', ok: false },
+      { text: '生日最容易被人猜到，要换个不是生日的', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '生日最好猜。捡到存折的人，第一件事就是试生日。换个不是生日的密码。'
+  },
+
+  // ===== 保险（收尾）=====
+  {
+    id: 'gq_261', cat: '保险', icon: '👴', title: '年金养老',
+    scene: '弟子{name}问：「掌门，弟子想老了有点进项，年金险合适不？」',
+    options: [
+      { text: '肯定合适', ok: false },
+      { text: '合适——年金险就是年轻时交钱，老了按月领', ok: true },
+      { text: '是骗人的', ok: false }
+    ],
+    explain: '年金险就是年轻时交钱，老了按月领。长期把稳，但利钱不算高。'
+  },
+  {
+    id: 'gq_262', cat: '保险', icon: '📱', title: '网上买',
+    scene: '弟子{name}在网上买保险，比线下便宜。问掌门靠不靠得住。',
+    options: [
+      { text: '肯定不靠谱', ok: false },
+      { text: '网上也能买，但要看清是哪家、保啥子、不保啥子', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '网上买保险也可以。但要看清是哪家的、保啥子、不保啥子。价格低，不等于保障好。'
+  },
+  {
+    id: 'gq_263', cat: '保险', icon: '💊', title: '带病投保',
+    scene: '弟子{name}已经有点小毛病，想瞒着买保险。掌门劝他。',
+    options: [
+      { text: '瞒着买', ok: false },
+      { text: '瞒着买，出事人家拒赔，钱也白交', ok: true },
+      { text: '先买再说', ok: false }
+    ],
+    explain: '瞒着买，理赔的时候人家一查病历，可以拒赔。钱白交，出事还赔不到。'
+  },
+  {
+    id: 'gq_264', cat: '保险', icon: '🔄', title: '退保',
+    scene: '弟子{name}想退一份保险，人家说只能拿回一点点。弟子问为啥子。',
+    options: [
+      { text: '是人家耍赖', ok: false },
+      { text: '前面几年交的钱，大半是费用，退保只能拿"现金价值"', ok: true },
+      { text: '是骗人的', ok: false }
+    ],
+    explain: '前面几年交的钱，大半是费用。退保只能按现金价值退，比交的少。'
+  },
+  {
+    id: 'gq_265', cat: '保险', icon: '🎁', title: '赠送险',
+    scene: '弟子{name}在网上买东西，商家说送一份保险。弟子觉得很划算。',
+    options: [
+      { text: '白送肯定好', ok: false },
+      { text: '要看清送的是啥子，多半是便宜的意外险', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '送的保险多半是便宜的意外险，保额不高。看清是啥子，莫当大事。'
+  },
+
+  // ===== 债券（收尾）=====
+  {
+    id: 'gq_266', cat: '债券', icon: '🏛️', title: '国债逆回购收益',
+    scene: '弟子{name}问：「掌门，弟子把钱借出去一夜，咋个算利钱？」',
+    options: [
+      { text: '看运气', ok: false },
+      { text: '按约定的利率算，一般不多，但比活期强', ok: true },
+      { text: '跟定期一样', ok: false }
+    ],
+    explain: '国债逆回购的利钱按约定的利率算。一般不多，但比放活期强，适合短期闲钱。'
+  },
+  {
+    id: 'gq_267', cat: '债券', icon: '📊', title: '债市',
+    scene: '弟子{name}问：「掌门，债也有像票那样的买卖场子？」',
+    options: [
+      { text: '莫得', ok: false },
+      { text: '有，债也能在交易所买卖', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '债也能在交易所买卖。你手里的债，随时可以卖给别人。'
+  },
+  {
+    id: 'gq_268', cat: '债券', icon: '💰', title: '买债好时机',
+    scene: '弟子{name}问：「掌门，啥子时候买债好？」',
+    options: [
+      { text: '随便', ok: false },
+      { text: '利钱高的时候买债好——将来利钱跌了，债价就涨', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '利钱高的时候买债划得来。将来利钱跌，你手里的债价就涨。'
+  },
+  {
+    id: 'gq_269', cat: '债券', icon: '📉', title: '债券基金跌',
+    scene: '弟子{name}买了一只债券基金，跌了几天，慌了。',
+    options: [
+      { text: '赶紧赎', ok: false },
+      { text: '债基跌得少、回升也稳，看长期', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '债基跌起来温和，回升也稳。短期的波动不用慌，看长期。'
+  },
+  {
+    id: 'gq_270', cat: '债券', icon: '🏢', title: '城投债',
+    scene: '弟子{name}听说有一种债叫「城投债」，利钱高，问掌门能不能买。',
+    options: [
+      { text: '利钱高就买', ok: false },
+      { text: '城投债是地方融资平台的债，看地方财政和信用，不能光看利钱', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '城投债是地方融资平台发的，看地方的财政和信用。利钱高，风险也大，要看清楚。'
+  },
+
+  // ===== 房产税务（收尾）=====
+  {
+    id: 'gq_271', cat: '房产税务', icon: '🏠', title: '买房时机',
+    scene: '弟子{name}问：「掌门，啥子时候买房好？」',
+    options: [
+      { text: '越低越好', ok: false },
+      { text: '看自己需不需要——自己住的，啥时候都行；投机的，要看行情', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '自己住，啥时候都行。投机，要看行情。别把住的地方当赌场。'
+  },
+  {
+    id: 'gq_272', cat: '房产税务', icon: '🏦', title: '提前还贷',
+    scene: '弟子{name}手里有点钱，问掌门该不该提前还贷。',
+    options: [
+      { text: '肯定还', ok: false },
+      { text: '看你贷的利钱高不高——利钱高，提前还划算', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '看你贷的利钱高不高。利钱高，提前还省的利息多，划得来。利钱低，不如拿去投资。'
+  },
+  {
+    id: 'gq_273', cat: '房产税务', icon: '💰', title: '房产继承',
+    scene: '弟子{name}问：「掌门，爹娘的房子给弟子，要交税不？」',
+    options: [
+      { text: '要交好多', ok: false },
+      { text: '继承一般不用交个税，但办过户有别的费用', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '继承一般不用交个税。过户有别的费用，但跟卖房比，负担小得多。'
+  },
+  {
+    id: 'gq_274', cat: '房产税务', icon: '🏛️', title: '赠与',
+    scene: '弟子{name}想把房子过户给娃儿，问掌门是"赠与"好还是"买卖"好。',
+    options: [
+      { text: '赠与好', ok: false },
+      { text: '要看情况——赠与当时便宜，但娃儿将来卖的时候可能要多交税', ok: true },
+      { text: '买卖好', ok: false }
+    ],
+    explain: '赠与当时便宜，但娃儿将来卖的时候，可能要按原价算，多交税。要算长远账。'
+  },
+  {
+    id: 'gq_275', cat: '房产税务', icon: '📋', title: '办证',
+    scene: '弟子{name}买了房，懒得去办证，拖了几年。掌门劝他早点去。',
+    options: [
+      { text: '不急', ok: false },
+      { text: '要早办——没办证，房子法律上还不算你的', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '没办证，房子法律上还不算你的。办证要趁早，免得以后扯皮。'
+  },
+
+  // ===== 反诈（收尾）=====
+  {
+    id: 'gq_276', cat: '反诈', icon: '💸', title: '假老板',
+    scene: '弟子{name}在一个群里，群主自称是某大商号的老板，带大家投资。',
+    options: [
+      { text: '跟着投', ok: false },
+      { text: '假老板太多了——要核实身份，莫跟着投', ok: true },
+      { text: '小心点', ok: false }
+    ],
+    explain: '网上自称老板的太多了，十有八九是假的。要投，得走正规渠道核实。'
+  },
+  {
+    id: 'gq_277', cat: '反诈', icon: '🏦', title: '假平台',
+    scene: '弟子{name}被人拉去一个平台，说能买卖海外的票，利钱很高。',
+    options: [
+      { text: '投一点试试', ok: false },
+      { text: '假平台——正规买卖要走朝廷批的场子', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '正规买卖要走朝廷批的场子。来路不明的平台，进去就是送钱。'
+  },
+  {
+    id: 'gq_278', cat: '反诈', icon: '📞', title: '客服电话',
+    scene: '弟子{name}接到电话，说他买的东西有问题，要给他退款，要他报账户。',
+    options: [
+      { text: '报给他', ok: false },
+      { text: '正规退款走原路，不会打电话要账户', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '正规退款走原路，钱会退回到你付款的账户。打电话问你账户的，是骗子。'
+  },
+  {
+    id: 'gq_279', cat: '反诈', icon: '🎁', title: '红包',
+    scene: '弟子{name}收到一条信息，说点开就有红包。弟子差点就点了。',
+    options: [
+      { text: '点开看看', ok: false },
+      { text: '不明来源的链接莫点，红包多半是诱饵', ok: true },
+      { text: '小心点', ok: false }
+    ],
+    explain: '不明来源的链接莫点。红包是诱饵，点了可能泄露信息，也可能装上坏东西。'
+  },
+  {
+    id: 'gq_280', cat: '反诈', icon: '💼', title: '假招聘',
+    scene: '弟子{name}看到一个招聘，说月钱很高，但要先交培训费。',
+    options: [
+      { text: '交费上岗', ok: false },
+      { text: '正规招聘不收培训费，先交钱的多半是坑', ok: true },
+      { text: '试试看', ok: false }
+    ],
+    explain: '正规招聘不收培训费。先交钱再上岗的，多半是坑，钱交了工作也莫得。'
+  },
+  {
+    id: 'gq_281', cat: '反诈', icon: '🏧', title: '转账',
+    scene: '弟子{name}接到"师兄"的消息，说急用钱，让他马上转一笔。',
+    options: [
+      { text: '赶紧转', ok: false },
+      { text: '打回电话亲口问——现在有换脸的骗术', ok: true },
+      { text: '先转一半', ok: false }
+    ],
+    explain: '现在有换脸的骗术，脸和声音都能仿。遇到借钱的，打电话亲口问。'
+  },
+  {
+    id: 'gq_282', cat: '反诈', icon: '💊', title: '神医',
+    scene: '弟子{name}村里来了个「神医」，说祖传秘方包治百病。',
+    options: [
+      { text: '请他看病', ok: false },
+      { text: '包治百病的都是骗子，要看正经医生', ok: true },
+      { text: '试试也无妨', ok: false }
+    ],
+    explain: '包治百病的都是骗子。耽误病情才是大事，要看正经医生。'
+  },
+  {
+    id: 'gq_283', cat: '反诈', icon: '📱', title: '钓鱼二维码',
+    scene: '弟子{name}停车的时候，看到车上贴了个二维码，说扫码交停车费。',
+    options: [
+      { text: '扫就扫', ok: false },
+      { text: '可能是假的，要看是不是官家的码', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '车上的码可能是假的。要看清是不是官家的码，别随便扫。'
+  },
+
+  // ===== 宏观（收尾）=====
+  {
+    id: 'gq_284', cat: '宏观', icon: '🌏', title: '汇率',
+    scene: '弟子{name}问：「掌门，两个国家的钱咋个换？」',
+    options: [
+      { text: '看运气', ok: false },
+      { text: '看汇率——两种钱兑换的比例', ok: true },
+      { text: '看朝廷', ok: false }
+    ],
+    explain: '汇率就是两种钱兑换的比例。汇率一动，做海外买卖的、出去耍的，都跟着动。'
+  },
+  {
+    id: 'gq_285', cat: '宏观', icon: '📈', title: 'GDP 增速',
+    scene: '弟子{name}问：「掌门，朝廷每年说 GDP 增速，增速慢了好不好？」',
+    options: [
+      { text: '越慢越好', ok: false },
+      { text: '不一定——要看跟别的比、跟往年比，还要看质量', ok: true },
+      { text: '越快越好', ok: false }
+    ],
+    explain: '增速不是越快越好，也不是越慢越好。要看跟别国比、跟往年比，还要看质量。'
+  },
+  {
+    id: 'gq_286', cat: '宏观', icon: '🏛️', title: '财政赤字',
+    scene: '弟子{name}问：「掌门，朝廷花的比收的多，这是好事不？」',
+    options: [
+      { text: '肯定不好', ok: false },
+      { text: '看情况——买卖不景气的时候，多花点钱反而该做', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '朝廷花的比收的多，叫财政赤字。买卖不景气的时候，多花点钱反而是该做的。'
+  },
+  {
+    id: 'gq_287', cat: '宏观', icon: '💵', title: '外汇管制',
+    scene: '弟子{name}问：「掌门，弟子想把毛拿出去，朝廷管不管？」',
+    options: [
+      { text: '不管', ok: false },
+      { text: '管——换外汇有额度，超过的要报批', ok: true },
+      { text: '随便换', ok: false }
+    ],
+    explain: '换外汇有额度，一年一人换多少是有数的。超过的，要报批。'
+  },
+  {
+    id: 'gq_288', cat: '宏观', icon: '📊', title: '失业率',
+    scene: '弟子{name}问：「掌门，朝廷说失业率，那个数靠不靠得住？」',
+    options: [
+      { text: '肯定准', ok: false },
+      { text: '要看是咋个算的——统计口径不一样，数字也不一样', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '失业率要看是咋个算的。统计算不算在家歇的、算不算打零工的，各地说法不一样。'
+  },
+  {
+    id: 'gq_289', cat: '宏观', icon: '📜', title: '五年规划',
+    scene: '弟子{name}问：「掌门，朝廷搞的那个『五年规划』，跟弟子有啥子关系？」',
+    options: [
+      { text: '莫得关系', ok: false },
+      { text: '有关系——规划里说了今后搞啥子，跟着走的多半吃得到红利', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '五年规划里说了今后重点搞啥子。跟着那个方向走，多半吃得到红利。'
+  },
+  {
+    id: 'gq_290', cat: '宏观', icon: '🌊', title: '逆全球化',
+    scene: '弟子{name}问：「掌门，弟子听说外面在『逆全球化』，这是啥子？」',
+    options: [
+      { text: '是好事', ok: false },
+      { text: '是各国开始筑墙——加税、限购，做买卖的更难', ok: true },
+      { text: '跟我们莫得关系', ok: false }
+    ],
+    explain: '逆全球化就是各国开始筑墙——加税、限购。做买卖的更难，买菜的老百姓也要多花钱。'
+  },
+
+  // ===== 投资心理（收尾）=====
+  {
+    id: 'gq_291', cat: '投资心理', icon: '🎭', title: '第一笔',
+    scene: '弟子{name}第一次买卖赚了钱，觉得自己是天才。掌门让他稳住。',
+    options: [
+      { text: '弟子就是天才', ok: false },
+      { text: '第一笔多半是运气，别当成本事', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '第一笔多半是运气。把它当本事，往后就要吃亏。'
+  },
+  {
+    id: 'gq_292', cat: '投资心理', icon: '📱', title: '看盘上瘾',
+    scene: '弟子{name}一刻不看盘就难受，饭也吃不下，觉也睡不好。',
+    options: [
+      { text: '多看几眼好些', ok: false },
+      { text: '这是上瘾了——看得越勤，越容易做错决定', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '看盘上瘾，越看越慌，越慌越乱做。把视线放远点，反而不容易做错。'
+  },
+  {
+    id: 'gq_293', cat: '投资心理', icon: '📊', title: '别人的建议',
+    scene: '弟子{name}问：「掌门，别个推荐的东西，弟子要不要听？」',
+    options: [
+      { text: '听就对了', ok: false },
+      { text: '别人的话只作参考——自己搞不懂的，别买', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '别人的话只作参考。自己搞不懂的，别买。买了也拿不住。'
+  },
+  {
+    id: 'gq_294', cat: '投资心理', icon: '🌊', title: '潮水退了',
+    scene: '弟子{name}说：「掌门，弟子发现赚钱的时候都是运气，亏钱的时候才是本事不够。」',
+    options: [
+      { text: '说得太悲观', ok: false },
+      { text: '说得对——赚钱的时候多想想是不是靠运气', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '赚钱的时候，多想想是不是靠运气。想清楚了，才不会在市场翻脸的时候措手不及。'
+  },
+  {
+    id: 'gq_295', cat: '投资心理', icon: '🎯', title: '知足',
+    scene: '弟子{name}赚了一笔，还想赚更多。掌门劝他先落袋一部分。',
+    options: [
+      { text: '再搏一把大的', ok: false },
+      { text: '落袋一部分——赚到手的才是真赚的', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '赚到手的，才是真赚的。全押着不落袋，迟早要还回去一部分。'
+  },
+
+  // ===== 股票（收尾）=====
+  {
+    id: 'gq_296', cat: '股票', icon: '📈', title: '牛回头',
+    scene: '弟子{name}说：「掌门，弟子听说牛市里也有暴跌，这是不是要跑了？」',
+    options: [
+      { text: '跑', ok: false },
+      { text: '牛市里的暴跌叫"牛回头"，是正常的事，要看大势', ok: true },
+      { text: '看运气', ok: false }
+    ],
+    explain: '牛市里的暴跌叫牛回头。是正常的事，先看大势，别急着跑。'
+  },
+  {
+    id: 'gq_297', cat: '股票', icon: '🚀', title: '停不下来',
+    scene: '弟子{name}赚了钱，还想赚更多，天天搏。掌门让他歇一歇。',
+    options: [
+      { text: '趁热打铁', ok: false },
+      { text: '该歇就歇——钱挣不完，人垮了就莫得了', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '钱挣不完，人垮了就莫得了。赚了钱该歇就歇，别把自己搏进去。'
+  },
+
+  // ===== 基金（收尾）=====
+  {
+    id: 'gq_298', cat: '基金', icon: '🔄', title: '换手率',
+    scene: '弟子{name}问：「掌门，弟子看一只基金换手率特别高，是好事不？」',
+    options: [
+      { text: '是好事', ok: false },
+      { text: '换手太高说明基金经理老在买卖，费用高，多半不是好事', ok: true },
+      { text: '看情况', ok: false }
+    ],
+    explain: '换手太高说明基金经理老在买卖，费用高，长期反而跑不赢。'
+  },
+  {
+    id: 'gq_299', cat: '基金', icon: '🎯', title: '基金经理',
+    scene: '弟子{name}问：「掌门，选基金要不要看是谁在管？」',
+    options: [
+      { text: '不用看', ok: false },
+      { text: '要看——经理的履历、风格、在任时间都要看', ok: true },
+      { text: '看名字', ok: false }
+    ],
+    explain: '基金是人在管，经理的履历、风格、在任时间都要看。人换了，风格也变了。'
+  },
+  {
+    id: 'gq_300', cat: '基金', icon: '💰', title: '长期持有',
+    scene: '弟子{name}问：「掌门，基金要拿好久？」',
+    options: [
+      { text: '看行情', ok: false },
+      { text: '股票型的，一般三五年才看得到效果', ok: true },
+      { text: '拿了就卖', ok: false }
+    ],
+    explain: '股票型基金，一般拿三五年才看得到效果。拿几天就想赚，那是赌。'
+  }
 ];

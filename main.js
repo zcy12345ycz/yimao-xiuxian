@@ -5,18 +5,21 @@ function renderQuickStats() {
   if (!s.created) return;
   
   // 1. 更新毛的数字（并处理闪烁特效）
-  try { 
+    try { 
     // 防御性检查：如果 s.stones 不存在或格式不对，立刻重置为 0
     if (!s.stones || typeof s.stones.toNum !== 'function') {
       s.stones = new Dec(0, 0);
     }
     const txt = fmtCoinVal(s.stones);
-    el.stoneText.textContent = (txt === undefined || txt === null || txt === '') ? '0' : txt;
-    
-    // 新增：数字弹跳动画
-    if (!el.stoneText.classList.contains('bump')) {
-      el.stoneText.classList.add('bump');
-      setTimeout(() => el.stoneText.classList.remove('bump'), 200);
+    const newText = (txt === undefined || txt === null || txt === '') ? '0' : txt;
+
+    // 只有数值真正变化时才更新 DOM + 触发动画
+    if (el.stoneText.textContent !== newText) {
+      el.stoneText.textContent = newText;
+      if (!el.stoneText.classList.contains('bump')) {
+        el.stoneText.classList.add('bump');
+        setTimeout(() => el.stoneText.classList.remove('bump'), 200);
+      }
     }
 
     if (s.stoneFlashFlag) {
@@ -56,7 +59,7 @@ function gameLoop(){
     const dt=Math.min((now-lastTickT)/1000,5);
     if(s.created&&s.discipleList.length>0){s.online=true;tickDiscipleGains(dt,false)}
     s.lastTick=now;lastTickT=now;
-    tickAge();tickLoyalty();tickEnergy();
+    tickAge();tickLoyalty();
   }
   if(now-lastUIT>1000){renderUI();lastUIT=now}
   if(now-lastQuickUIT>200){renderQuickStats();lastQuickUIT=now}
@@ -85,32 +88,31 @@ function gameLoop(){
     checkYearbook();
     checkDefection();
   }
-}function ensureAudioInit(){
+}
+function ensureAudioInit(){
+  // ended 监听器只注册一次
+  const bgm = document.getElementById('bgm');
+  if (bgm) {
+    bgm.addEventListener('ended', () => {
+      if (!s.musicEnabled) return;
+      const delay = 30000 + Math.random() * 90000; // 30秒 ~ 120秒
+      console.log(`🎵 BGM 播放结束，将在 ${Math.round(delay/1000)} 秒后重新播放`);
+      setTimeout(() => {
+        if (s.musicEnabled && _userHasInteracted) {
+          bgm.currentTime = 0;
+          bgm.play().catch(e => {});
+        }
+      }, delay);
+    });
+  }
+
   const h = () => {
     AudioSys.init();
     AudioSys.resume();
-    
-    // 检查 BGM 并在用户交互后播放
-    const bgm = document.getElementById('bgm');
-    if (bgm) {
-      // 首次交互：如果有音乐，开始播放
-      if (s.musicEnabled && bgm.paused) {
-        updateBgm();
-      }
-      // 监听播放结束，随机歇 30 秒到 2 分钟后再播
-      bgm.addEventListener('ended', () => {
-        if (!s.musicEnabled) return;
-        const delay = 30000 + Math.random() * 90000; // 30秒 ~ 120秒
-        console.log(`🎵 BGM 播放结束，将在 ${Math.round(delay/1000)} 秒后重新播放`);
-        setTimeout(() => {
-          if (s.musicEnabled && _userHasInteracted) {
-            bgm.currentTime = 0;
-            bgm.play().catch(e => {});
-          }
-        }, delay);
-      }, { once: false });
+    // 如果音乐开着但没在放，就起播；已经在放则不动它
+    if (bgm && s.musicEnabled && bgm.paused && _userHasInteracted) {
+      updateBgm();
     }
-    
     setTimeout(() => {
       if (AudioSys.ctx && AudioSys.ctx.state === 'running') {
         if (AudioSys.enabled) AudioSys.audioReady();
@@ -128,15 +130,10 @@ el.startBtn.onclick=(e)=>{
   AudioSys.init();
   AudioSys.resume();
   AudioSys.click();
-  
-  // 新增：提前预加载 BGM，让浏览器在用户输入名字时就开始缓冲
-  const bgm = document.getElementById('bgm');
-  if (bgm) {
-    bgm.load(); // 强制触发下载
-    console.log('📻 开始预加载 BGM');
-  }
-  
-  // 原有的代码：关闭启动页，显示起名界面
+
+  // 顺手在这里把 BGM 起播，用户一点就听得到
+  updateBgm();
+
   el.splash.classList.add('hide');
   setTimeout(()=>{
     el.splash.style.display='none';
@@ -194,8 +191,6 @@ if(toggleBtn) {
 
 el.btnReport.onclick=(e)=>{e.stopPropagation();AudioSys.click();if(s.discipleList.length===0){toast('还没有弟子，先收徒');return}openMemos()};
 el.btnLijian.onclick=(e)=>{e.stopPropagation();AudioSys.click();openSectHome()};
-const dailyBtn = document.getElementById('btnDailySummary');
-if(dailyBtn) dailyBtn.onclick = (e) => { e.stopPropagation(); AudioSys.click(); openDailySummary(); };
 el.btnRecruit.onclick=(e)=>{
   e.stopPropagation();
   AudioSys.click();
@@ -205,6 +200,32 @@ el.btnRecruit.onclick=(e)=>{
     openRecruit();
   }
 };
+/* ===== 新布局绑定 ===== */
+el.btnSect.onclick=(e)=>{e.stopPropagation();AudioSys.click();openSect()};
+el.btnMijing.onclick=(e)=>{e.stopPropagation();AudioSys.click();if(s.discipleList.length===0){toast('还没有弟子，先收徒');return}openMijingSelect()};
+el.btnExpedition.onclick=(e)=>{e.stopPropagation();AudioSys.click();if(s.discipleList.length===0){toast('还没有弟子，先收徒');return}openExpedition()};
+el.memoQuickBtn.onclick=(e)=>{e.stopPropagation();AudioSys.click();if(s.discipleList.length===0){toast('还没有弟子，先收徒');return}openMemos()};
+if(el.recruitFab){
+  el.recruitFab.onclick=(e)=>{
+    e.stopPropagation();
+    if(s.flags.firstRecruitDone){
+      const cd=recruitCooldownRemain();
+      if(cd>0){toast('刚收过弟子 · 还需等 '+fmtDur(cd/1000),2800);return}
+    }
+    if(s.discipleList.length>=maxDisciples()){
+      const nxt=nextDiscipleThreshold();
+      if(nxt)toast('弟子已满 · 还需 '+nxt.remain+' 次突破解锁下一位',2800);
+      else toast('弟子已满',2800);
+      return;
+    }
+    AudioSys.click();
+    if(!s.flags.firstRecruitDone&&s.discipleList.length===0){
+      openRecruit(true);
+    } else {
+      openRecruit();
+    }
+  };
+}
 el.soundQuickBtn.onclick=(e)=>{
   e.stopPropagation();
   AudioSys.init();
@@ -230,8 +251,7 @@ if(el.helpQuickBtn){
     openHelp();
   };
 }
-el.menuHelp.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openHelp()};
-el.menuDonate.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openDonate()};
+
 (function(){
   const btn=el.menuBtn;
   btn.onclick=(e)=>{

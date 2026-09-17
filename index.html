@@ -29,7 +29,7 @@ var _hmt = _hmt || [];
   <div class="splash-coin">🪙</div>
   <div class="splash-title">一毛修仙</div>
   <div class="splash-sub">ALL FOR ONE MAO</div>
-  <div class="splash-story" id="splashStory"></div>
+  <div class="splash-story" id="splashStory">六岁那年，你算了一笔账：<br>中国有14亿人，如果每人给你一毛钱……<br><span class="hl">你就有14亿毛。</span><span class="pause"></span>你兴奋得一夜没睡。<span class="pause"></span>后来你长大了，发现没有人会给你一毛钱。<span class="pause"></span>于是你决定修仙，<br>并立下大志：<span class="hl">培养出能收齐14亿毛的弟子。</span></div>
   <button class="create-confirm" id="startBtn" style="max-width:340px">踏 入 道 途</button>
   <div class="splash-version" id="splashVersion">v1.7 · Zhao | Struct. E.</div>
   <div class="splash-author">by <span class="hl">Zhao | Struct. E.</span> · 一级注册结构工程师 · 完全不懂代码 · 全靠 AI 做出来的游戏</div>
@@ -53,18 +53,18 @@ var _hmt = _hmt || [];
 
 <div id="game">
 <div class="watermark" id="gameWatermark">Zhao | Struct. E.</div>
+  <button class="recruit-fab" id="recruitFab" title="收徒">🧑</button>
   <button class="donate-fab" id="donateFab" title="赏我一毛">🪙</button>
   <div class="tianxia" id="tianxiaBox"></div>
   <div class="tianxiang-banner" id="tianxiangBanner"></div>
 
   <div class="menu-wrap">
     <button class="icon-btn" id="signInQuickBtn" title="每日签到">📅<span class="dot-badge" id="signInQuickDot" style="display:none"></span></button>
+    <button class="icon-btn" id="memoQuickBtn" title="批阅奏章">📜<span class="num-badge" id="memoQuickDot" style="display:none">0</span></button>
     <button class="icon-btn" id="soundQuickBtn" title="声音">🔊</button>
      <button class="icon-btn" id="menuBtn">☰</button>
     <button class="icon-btn" id="helpQuickBtn" title="玩法说明">❓</button>
                 <div class="menu-pop" id="menuPop">
-      <div class="menu-item" id="menuHelp"><span class="mi-icon">❓</span>玩法说明</div>
-      <div class="menu-item" id="menuDonate"><span class="mi-icon">🪙</span>赏我一毛</div>
       <div class="menu-item" id="menuSave"><span class="mi-icon">💾</span>存档管理</div>
       <div class="menu-item" id="menuSettings"><span class="mi-icon">⚙️</span>设置</div>
     </div>
@@ -80,7 +80,7 @@ var _hmt = _hmt || [];
       <span>弟子 <span class="sv" id="discipleCount">1</span> 人</span>
       <span class="sep">·</span>
       <span>第 <span class="sv" id="eraNum">1</span> 纪</span>
-      <span class="sep">·</span><span>立派 <span class="sv" id="playDays">1</span> 天</span><span class="sep">·</span><span class="energy-pill">⚡ 精力 <span class="sv" id="masterEnergyText">5</span></span>
+      <span class="sep">·</span><span>立派 <span class="sv" id="playDays">1</span> 天</span>
     </div>
   </header>
 
@@ -487,10 +487,14 @@ var _hmt = _hmt || [];
       <span class="gb-text" id="goalText">0.00%</span>
     </div>
     <div class="actions">
-      <button class="btn gold" id="btnReport">批 阅 奏 章<span class="badge" id="memoBadge" style="display:none">0</span></button>
-      <button class="btn gold" id="btnDailySummary" style="display:none">宗 门 日 结</button>
-      <button class="btn" id="btnRecruit">收 徒</button>
+      <button class="btn" id="btnSect">🔨 建 设</button>
+      <button class="btn" id="btnMijing">🗺️ 秘 境</button>
+      <button class="btn" id="btnExpedition">🧭 外 派</button>
       <button class="btn" id="btnLijian">🏯 宗 门</button>
+    </div>
+    <div style="display:none">
+      <button class="btn gold" id="btnReport">批 阅 奏 章<span class="badge" id="memoBadge" style="display:none">0</span></button>
+      <button class="btn" id="btnRecruit">收 徒</button>
     </div>
 
 <div class="modal" id="modal"><div class="modal-card" id="modalCard"></div></div>
@@ -526,6 +530,14 @@ if ('serviceWorker' in navigator) {
       .catch((err) => console.log('SW 注册失败', err));
   });
 }
+</script>
+<script>
+window.addEventListener('error', function(e){
+  console.error('[一毛修仙] 全局错误:', e.message, e.filename, e.lineno, e.error);
+});
+window.addEventListener('unhandledrejection', function(e){
+  console.error('[一毛修仙] Promise 错误:', e.reason);
+});
 </script>
 </body>
 </html>
