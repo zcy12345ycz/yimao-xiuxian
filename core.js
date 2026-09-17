@@ -51,7 +51,7 @@ function fmtExp(d){return d.format()}
 /* ============ 工具 ============ */
 const $=id=>document.getElementById(id);
 const el={
-  splash:$('splash'),topGoalText:$('topGoalText'),create:$('create'),game:$('game'),
+  splash:$('splash'),create:$('create'),game:$('game'),
   nameInput:$('nameInput'),randomNameBtn:$('randomNameBtn'),
   createConfirm:$('createConfirm'),startBtn:$('startBtn'),importFromCreate:$('importFromCreate'),
   splashVersion:$('splashVersion'),splashStory:$('splashStory'),
@@ -65,20 +65,14 @@ const el={
   sectExpFill:$('sectExpFill'),sectExpText:$('sectExpText'),barSubLeft:$('barSubLeft'),barSubRight:$('barSubRight'),
   stoneText:$('stoneText'),nextReportEl:$('nextReportEl'),rtFill:$('rtFill'),rtText:$('rtText'),
   goalFill:$('goalFill'),goalText:$('goalText'),
-  btnReport:$('btnReport'),btnRecruit:$('btnRecruit'),memoBadge:$('memoBadge'),
+  btnReport:$('btnReport'),btnRecruit:$('btnRecruit'),btnLijian:$('btnLijian'),memoBadge:$('memoBadge'),
   modal:$('modal'),modalCard:$('modalCard'),flash:$('flash'),toast:$('toast'),tipBanner:$('tipBanner'),
   tutMask:$('tutMask'),tutTip:$('tutTip'),
   menuBtn:$('menuBtn'),menuBtnDot:$('menuBtnDot'),menuPop:$('menuPop'),
+  signInQuickBtn:$('signInQuickBtn'),signInQuickDot:$('signInQuickDot'),
   soundQuickBtn:$('soundQuickBtn'),donateQuickBtn:$('donateQuickBtn'),helpQuickBtn:$('helpQuickBtn'),
-  menuClaimAll:$('menuClaimAll'),
-  menuSignIn:$('menuSignIn'),menuSignInBadge:$('menuSignInBadge'),
-  menuDaily:$('menuDaily'),menuDailyBadge:$('menuDailyBadge'),
-  menuWeekly:$('menuWeekly'),menuWeeklyBadge:$('menuWeeklyBadge'),
-  menuDisciples:$('menuDisciples'),menuRelations:$('menuRelations'),menuVice:$('menuVice'),menuSect:$('menuSect'),
-  menuExpedition:$('menuExpedition'),
-  menuMijing:$('menuMijing'),menuRelic:$('menuRelic'),
-  menuSave:$('menuSave'),menuSettings:$('menuSettings'),menuChronicle:$('menuChronicle'),menuAchieve:$('menuAchieve'),
-  menuYearbook:$('menuYearbook'),menuLegacy:$('menuLegacy'),
+  menuSave:$('menuSave'),menuSettings:$('menuSettings'),
+  menuHelp:$('menuHelp'),menuDonate:$('menuDonate'),
   importFileInput:$('importFileInput'),
   phaseGoal:$('phaseGoal'),phaseGoalText:$('phaseGoalText'),phaseGoalProgress:$('phaseGoalProgress'),phaseGoalTime:$('phaseGoalTime'),
   breakthrough:$('breakthrough'),bkCard:$('bkCard'),bkRays:$('bkRays'),
@@ -89,8 +83,10 @@ const el={
   expeditionRow:$('expeditionRow'),expName:$('expName'),expDesc:$('expDesc'),expTime:$('expTime'),
     worldBuffRow:$('worldBuffRow'),worldBuffIcon:$('worldBuffIcon'),worldBuffName:$('worldBuffName'),worldBuffDesc:$('worldBuffDesc'),worldBuffTime:$('worldBuffTime'),
   moonOrderRow:$('moonOrderRow'),moonOrderIcon:$('moonOrderIcon'),moonOrderName:$('moonOrderName'),moonOrderDesc:$('moonOrderDesc'),
+  taskProgressRow:$('taskProgressRow'),taskTodayText:$('taskTodayText'),taskWeekText:$('taskWeekText'),
   menuMoonOrder:$('menuMoonOrder'),
   ending:$('ending'),endingCard:$('endingCard'),
+  donateFab:$('donateFab'),
   firstRecruit:$('firstRecruit'),frSkip:$('frSkip')
 };
 function hexToRgba(h,a){const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return`rgba(${r},${g},${b},${a})`}
@@ -156,7 +152,7 @@ function createDefaultState(){
     unreadLog:{exp:new Dec(0,0),stone:new Dec(0,0),breaks:[],fails:[]},
     autoBank:{exp:new Dec(0,0),stone:new Dec(0,0),breaks:[],count:0},
     recentEvents:[],
-    numFormat:'short',audioEnabled:true,vibrationEnabled:true,fontSize:'normal',dialect:'sc',
+    numFormat:'short',audioEnabled:true,musicEnabled:true,masterEnergy:5,lastEnergyRecover:Date.now(),dailyPendingRewards:{exp:new Dec(0,0),stone:new Dec(0,0)},vibrationEnabled:true,fontSize:'normal',dialect:'sc',
     viceEnabled:false,lastBreak:null,tipsSeen:{},openingTutorialDone:false,stoneFlashFlag:false,
     mijingCooldowns:{low:0,mid:0,high:0,top:0},clickEggCount:0,
     nextTalent:false,relics:[],lastCheckAge:0,
@@ -170,7 +166,8 @@ function createDefaultState(){
     moonOrder:'cultivate',
     moonOrderChangedAt:0,
     lastRecruitAt:0,
-    signIn:{lastDate:'',cycleDay:0,totalDays:0},
+    signIn:{lastDate:'',cycleDay:0,totalDays:0,dailyQuiz:{date:'',questions:[],answers:[],answeredAt:0,rewardGranted:false}},
+    quizStats:{total:0,correct:0,days:0,streak:0,bestStreak:0,history:[]},
     dailyBuff:{until:0},
     milestones:{},
     eventChain:{},
@@ -205,7 +202,7 @@ function legacyBreakBonus(){return legacyTreeLv('break')*0.01}
 function legacyLoyaltyBonus(){return legacyTreeLv('loyalty')*5}
 function legacyOfflineMul(){return 1+legacyTreeLv('offline')*0.10}
 function legacyMijingCdMul(){return 1-Math.min(0.5,legacyTreeLv('mijing')*0.10)}
-function expNeed(lv){return Dec.of(1.09).pow(lv).mul(100)}
+function expNeed(lv){return Dec.of(1.10).pow(lv).mul(200)}
 function getRoot(d){return ROOTS.find(r=>r.id===d.root)||ROOTS[5]}
 function getP(d){return PERSONALITIES.find(x=>x.id===d.personality)||PERSONALITIES[0]}
 function getSpecialty(d){return SPECIALTIES.find(x=>x.id===d.specialty)||SPECIALTIES[0]}
@@ -237,6 +234,48 @@ function activeWorldBuffs(){
   const now=Date.now();
   return s.worldEvents.filter(e=>!e.done&&e.buff&&e.startAt<=now&&now<e.buffEnd);
 }
+/* ============ 弟子状态工具 ============ */
+function getActiveStates(d){
+  if(!d||!Array.isArray(d.states))return [];
+  const now=Date.now();
+  return d.states.filter(st=>st&&st.id&&st.until>now);
+}
+function addState(d,typeId,durationMs){
+  if(!d)return;
+  const t=STATE_TYPES[typeId];
+  if(!t)return;
+  if(!Array.isArray(d.states))d.states=[];
+  const dur=durationMs||t.duration;
+  const until=Date.now()+dur;
+  const existing=d.states.find(x=>x&&x.id===typeId);
+  if(existing){ if(until>existing.until)existing.until=until; }
+  else{ d.states.push({id:typeId,until,startedAt:Date.now()}); }
+}
+function stateExpMul(d){
+  let m=1;
+  for(const st of getActiveStates(d)){
+    const t=STATE_TYPES[st.id];
+    if(t&&t.expMul)m*=t.expMul;
+  }
+  return m;
+}
+function stateBreakAdd(d){
+  let a=0;
+  for(const st of getActiveStates(d)){
+    const t=STATE_TYPES[st.id];
+    if(t&&t.breakAdd)a+=t.breakAdd;
+  }
+  return a;
+}
+function stateBreakMul(d){
+  let m=1;
+  for(const st of getActiveStates(d)){
+    const t=STATE_TYPES[st.id];
+    if(t&&t.breakMul)m*=t.breakMul;
+  }
+  return m;
+}
+
 /* 修为产出底数 1.06 → 1.04 */
 function discipleExpRate(d){
   const p=getP(d),apt=getApt(d),root=getRoot(d);
@@ -250,6 +289,7 @@ function discipleExpRate(d){
       base=base.mul(worldBuffMul('sermon'));
   base=base.mul(moonExpMul());
   {const sp=getSpecialty(d);if(sp.expMul)base=base.mul(sp.expMul);}
+  base=base.mul(stateExpMul(d));
   return base;
 }
 function discipleStoneRate(d){
@@ -275,11 +315,15 @@ function discipleBreakRate(d){
   base+=legacyBreakBonus();
     if(d.forceBreak)base+=CONFIG.breakForceBreakBonus;
   {const sp=getSpecialty(d);if(sp.breakBonus)base+=sp.breakBonus;}
+  base+=stateBreakAdd(d);
+  base*=stateBreakMul(d);
+  // 硬保底：大境界连续失败 8 次，突破率直接拉到 90%
+  if((d.level%9===8)&&(d.failStreak||0)>=8)base=Math.max(base,0.90);
   return Math.max(CONFIG.breakMinRate,Math.min(CONFIG.breakMaxRate,base));
 }
 function expProgress(d){return d.exp.div(expNeed(d.level)).toNum()}
-function caveCost(){return Dec.of(1.3).pow(s.cave).mul(50)}
-function buildingCost(key){return Dec.of(1.5).pow(s.buildings[key]).mul(200)}
+function caveCost(){return Dec.of(1.6).pow(s.cave).mul(100)}
+function buildingCost(key){return Dec.of(1.8).pow(s.buildings[key]).mul(200)}
 function realmOf(lv){const si=Math.floor(lv/9);const b=REALMS[si%REALMS.length];const era=Math.floor(si/REALMS.length);const sub=lv%9;const pre=era>0?'第'+(era+1)+'纪·':'';return{si,era,sub,name:pre+b.n+CN[sub]+'重',short:pre+b.n,c:b.c,d:b.d}}
 function topDisciple(){if(s.discipleList.length===0)return null;return s.discipleList.reduce((a,b)=>b.level>a.level?b:a)}
 
@@ -353,6 +397,18 @@ const AudioSys={ctx:null,enabled:true,
   legacyUp(){this.tone(523,0.2,'sine',0.08);this.tone(784,0.25,'sine',0.08,0.15);this.tone(1047,0.3,'sine',0.08,0.3);this.tone(1318,0.5,'sine',0.08,0.5)}
 };
 
+/* ============ 背景音乐控制 ============ */
+function updateBgm() {
+  const bgm = document.getElementById('bgm');
+  if (!bgm) return;
+  if (s.musicEnabled && _userHasInteracted) {
+    bgm.volume = 0.2; // 音量大小，可自行调整
+    bgm.play().catch(e => console.log('BGM 播放等待用户交互:', e));
+  } else {
+    bgm.pause();
+  }
+}
+
 /* ============ 存档 ============ */
 function serializeState(){
   return{
@@ -370,7 +426,7 @@ function serializeState(){
     lastSnapshot:s.lastSnapshot,
     firstEraTime:s.firstEraTime,createdAt:s.createdAt,
     recentEvents:s.recentEvents||[],
-    numFormat:s.numFormat||'short',audioEnabled:AudioSys.enabled,
+    numFormat:s.numFormat||'short',audioEnabled:AudioSys.enabled,musicEnabled:s.musicEnabled!==false,masterEnergy:s.masterEnergy,masterEnergyRecover:s.lastEnergyRecover,dailyPendingRewards:{exp:{m:(s.dailyPendingRewards&&s.dailyPendingRewards.exp.m)||0,e:(s.dailyPendingRewards&&s.dailyPendingRewards.exp.e)||0},stone:{m:(s.dailyPendingRewards&&s.dailyPendingRewards.stone.m)||0,e:(s.dailyPendingRewards&&s.dailyPendingRewards.stone.e)||0}},
     vibrationEnabled:s.vibrationEnabled!==false,fontSize:s.fontSize||'normal',dialect:s.dialect||'sc',
     viceEnabled:!!s.viceEnabled,lastBreak:s.lastBreak||null,
     tipsSeen:s.tipsSeen||{},openingTutorialDone:!!s.openingTutorialDone,
@@ -390,7 +446,8 @@ function serializeState(){
     moonOrder:s.moonOrder||'cultivate',
     moonOrderChangedAt:s.moonOrderChangedAt||0,
     lastRecruitAt:s.lastRecruitAt||0,
-    signIn:s.signIn||{lastDate:'',cycleDay:0,totalDays:0},
+    signIn:s.signIn||{lastDate:'',cycleDay:0,totalDays:0,dailyQuiz:{date:'',questions:[],answers:[],answeredAt:0,rewardGranted:false}},
+    quizStats:s.quizStats||{total:0,correct:0,days:0,streak:0,bestStreak:0,history:[]},
     dailyBuff:s.dailyBuff||{until:0},
     milestones:s.milestones||{},
     eventChain:s.eventChain||{},
@@ -419,7 +476,8 @@ function serializeDisciple(d){
     relationships:d.relationships||[],age:d.age||18,
     storyArcs:(d.storyArcs||[]).map(a=>({stage:a.stage||1,done:!!a.done,doneAt:a.doneAt||0})),
     forceBreak:!!d.forceBreak,
-    legacyQuote:d.legacyQuote||null,legacyChecked:!!d.legacyChecked};
+    legacyQuote:d.legacyQuote||null,legacyChecked:!!d.legacyChecked,
+    states:(d.states||[]).filter(x=>x&&x.id&&x.until)};
 }
 function deserializeDisciple(d){
   const p=d.personality||'steady';
@@ -452,7 +510,8 @@ function deserializeDisciple(d){
     age:typeof d.age==='number'?d.age:18,
     storyArcs:arcs,
     forceBreak:!!d.forceBreak,
-    legacyQuote:d.legacyQuote||null,legacyChecked:!!d.legacyChecked};
+    legacyQuote:d.legacyQuote||null,legacyChecked:!!d.legacyChecked,
+    states:Array.isArray(d.states)?d.states.filter(x=>x&&x.id&&x.until):[]};
 }
 function serializeMemo(m){return{id:m.id,time:m.time,interval:m.interval,read:m.read,isOffline:!!m.isOffline,isAutoBank:!!m.isAutoBank,autoCount:m.autoCount||0,totalExp:{m:m.totalExp.m,e:m.totalExp.e},totalStone:{m:m.totalStone.m,e:m.totalStone.e},breaks:m.breaks,fails:m.fails,voice:m.voice,greeting:m.greeting,daily:m.daily,chatter:m.chatter,bigBreaks:m.bigBreaks,event:m.event}}
 function deserializeMemo(m){return{id:m.id,time:m.time,interval:m.interval,read:!!m.read,isOffline:!!m.isOffline,isAutoBank:!!m.isAutoBank,autoCount:m.autoCount||0,totalExp:new Dec((m.totalExp&&m.totalExp.m)||0,(m.totalExp&&m.totalExp.e)||0),totalStone:new Dec((m.totalStone&&m.totalStone.m)||0,(m.totalStone&&m.totalStone.e)||0),breaks:m.breaks||[],fails:m.fails||[],voice:m.voice||'',greeting:m.greeting||'',daily:m.daily||'',chatter:m.chatter||null,bigBreaks:m.bigBreaks||[],event:m.event||null}}
@@ -540,6 +599,14 @@ function applySaveData(rawData){
   s.recentEvents=Array.isArray(data.recentEvents)?data.recentEvents:[];
   s.numFormat=data.numFormat||'short';DEC_LONG_FORMAT=(s.numFormat==='long');
   if(typeof data.audioEnabled==='boolean')AudioSys.enabled=data.audioEnabled;
+  if(typeof data.musicEnabled==='boolean')s.musicEnabled=data.musicEnabled;else s.musicEnabled=true;
+  s.masterEnergy = typeof data.masterEnergy === 'number' ? data.masterEnergy : 5;
+  s.lastEnergyRecover = data.masterEnergyRecover || Date.now();
+  if(data.dailyPendingRewards && typeof data.dailyPendingRewards.exp.m === 'number') {
+    s.dailyPendingRewards = { exp: new Dec(data.dailyPendingRewards.exp.m, data.dailyPendingRewards.exp.e), stone: new Dec(data.dailyPendingRewards.stone.m, data.dailyPendingRewards.stone.e) };
+  } else {
+    s.dailyPendingRewards = { exp: new Dec(0,0), stone: new Dec(0,0) };
+  }
   s.vibrationEnabled=data.vibrationEnabled!==false;s.fontSize=data.fontSize||'normal';s.dialect=data.dialect||'sc';
   s.viceEnabled=!!data.viceEnabled;s.lastBreak=data.lastBreak||null;
   s.tipsSeen=Object.assign({},data.tipsSeen||{});
@@ -561,6 +628,17 @@ function applySaveData(rawData){
   s.moonOrderChangedAt=data.moonOrderChangedAt||0;
   s.lastRecruitAt=data.lastRecruitAt||0;
   s.signIn=data.signIn||{lastDate:'',cycleDay:0,totalDays:0};
+  s.quizStats=Object.assign({total:0,correct:0,days:0,streak:0,bestStreak:0,history:[]},data.quizStats||{});
+  if(!Array.isArray(s.quizStats.history))s.quizStats.history=[];
+  if(!s.signIn.dailyQuiz||typeof s.signIn.dailyQuiz!=='object'){
+    s.signIn.dailyQuiz={date:'',questions:[],answers:[],answeredAt:0,rewardGranted:false};
+  }
+  // 兼容旧存档：确保 dailyQuiz 各字段存在
+  if(!s.signIn.dailyQuiz.questions)s.signIn.dailyQuiz.questions=[];
+  if(!s.signIn.dailyQuiz.answers)s.signIn.dailyQuiz.answers=[];
+  if(typeof s.signIn.dailyQuiz.answeredAt!=='number')s.signIn.dailyQuiz.answeredAt=0;
+  if(typeof s.signIn.dailyQuiz.rewardGranted!=='boolean')s.signIn.dailyQuiz.rewardGranted=false;
+  if(typeof s.signIn.dailyQuiz.date!=='string')s.signIn.dailyQuiz.date='';
   s.dailyBuff=data.dailyBuff||{until:0};
   s.milestones=data.milestones||{};
   s.eventChain=data.eventChain||{};
@@ -782,6 +860,28 @@ function executeSave() {
   } finally {
     _saveTimer = null;
   }
+}
+
+function tickEnergy(){
+  if(!s.created) return;
+  const now = Date.now();
+  if(!s.lastEnergyRecover) s.lastEnergyRecover = now;
+  const elapsed = now - s.lastEnergyRecover;
+  const interval = CONFIG.energyRecoverInterval;
+  const maxEnergy = CONFIG.maxEnergy;
+  if(elapsed >= interval && s.masterEnergy < maxEnergy){
+    const recovered = Math.floor(elapsed / interval);
+    s.masterEnergy = Math.min(maxEnergy, s.masterEnergy + recovered);
+    s.lastEnergyRecover += recovered * interval;
+  }
+}
+function consumeEnergy(amount){
+  amount = amount || 1;
+  if(s.masterEnergy < amount) return false;
+  s.masterEnergy -= amount;
+  save();
+  renderUI();
+  return true;
 }
 
 function flushSave() {

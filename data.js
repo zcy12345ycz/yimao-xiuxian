@@ -1,5 +1,5 @@
 /* ============ 版本 ============ */
-const GAME_VERSION='v0.5';
+const GAME_VERSION='v0.9.6.3';
 const GAME_AUTHOR='Zhao | Struct. E.';
 const CURRENT_SAVE_VERSION=4;
 let DEC_LONG_FORMAT=false;
@@ -11,21 +11,21 @@ let DEC_LONG_FORMAT=false;
  * ============================================================ */
 const CONFIG = {
   // ---- 突破 ----
-  breakBaseSmall: 0.65,        // 小境界基础突破率
-  breakBaseBig: 0.30,          // 大境界基础突破率
+  breakBaseSmall: 0.35,        // 小境界基础突破率
+  breakBaseBig: 0.10,          // 大境界基础突破率
   breakFailStreakBonus: 0.08,  // 每次失败累积 +8% 突破率
   breakFailStreakMax: 0.40,    // 保底加成上限
   breakMinRate: 0.05,          // 突破率下限
   breakMaxRate: 0.98,          // 突破率上限
   breakAttemptRate: 0.85,      // 达到经验后每次实际尝试的概率
-  breakFailLossSmall: 0.30,    // 小境界失败损失经验比例
-  breakFailLossBig: 0.25,      // 大境界失败损失经验比例
+  breakFailLossSmall: 0.50,    // 小境界失败损失经验比例
+  breakFailLossBig: 0.60,      // 大境界失败损失经验比例
   breakChosenBonus: 0.08,      // 天命之子突破加成
   breakForceBreakBonus: 0.50,  // 破障丹加成
 
   // ---- 修为产出 ----
-  expBase: 0.5,                // 修为基础值（0.1→0.5，开局提速 5 倍）
-  expLevelGrowth: 1.04,        // 每级增长（1.05→1.04，平缓后期曲线）
+  expBase: 0.1,                // 修为基础值
+  expLevelGrowth: 1.04,        // 每级增长
   expRealmJump: 1.5,           // 每大境界跳跃倍率
   expRealmJumpInterval: 9,     // 几级一个大境界
 
@@ -79,19 +79,22 @@ const CONFIG = {
   maxChronicle: 200,                // 史册最大条数
   maxOfflineTick: 24 * 3600,        // 离线收益上限（秒）
   eraBonus: 3,                      // 每纪元永久倍率
-  eraResetLevel: 72,                // 转生所需等级
+  eraResetLevel: 189,                // 转生所需等级
   targetMao: 1400000000,            // 终极目标：14 亿毛
   grandTournamentMao: 10000000,     // 宗门大比触发阈值：1000 万毛
   refreshHour: 4,                   // 每日刷新时间（凌晨 4 点）
   viceCut: 0.10,                    // 副掌门抽成比例
-    yearDuration: 30 * 86400000,      // 年鉴周期：30 天
+  yearDuration: 30 * 86400000,      // 年鉴周期：30 天
+  // ---- 掌门精力 ----
+  maxEnergy: 5,                         // 精力上限
+  energyRecoverInterval: 4 * 3600 * 1000, // 每4小时恢复1点精力
 
       // ---- 掌门月令 ----
   moonOrderDefault: 'cultivate',    // 默认月令
   moonOrderCooldown: 12 * 3600 * 1000, // 月令切换冷却：12 小时
 
   // ---- 收徒 ----
-  discipleRecruitCooldown: 30 * 60 * 1000 // 收徒冷却：30 分钟
+  discipleRecruitCooldown: 2 * 3600 * 1000 // 收徒冷却：2 小时
 };
 
 
@@ -135,14 +138,22 @@ function getWeekId(){const now=new Date();const year=now.getFullYear();const jan
 
 /* ============ 签到奖励表 ============ */
 const SIGN_IN_REWARDS=[
-  {day:1,icon:'🪙',name:'×1',type:'stone',mul:1},
-  {day:2,icon:'🪙',name:'×2',type:'stone',mul:2},
-  {day:3,icon:'📖',name:'修为',type:'exp',mul:0.2},
-  {day:4,icon:'🪙',name:'×3',type:'stone',mul:3},
+  {day:1,icon:'🪙',name:'×2',type:'stone',mul:2},
+  {day:2,icon:'🪙',name:'×3',type:'stone',mul:3},
+  {day:3,icon:'📖',name:'修为',type:'exp',mul:0.3},
+  {day:4,icon:'🪙',name:'×4',type:'stone',mul:4},
   {day:5,icon:'🎁',name:'道具',type:'item',pool:['break_pill','talent_pill','rebirth_pill','long_life_pill']},
-  {day:6,icon:'🪙',name:'×5',type:'stone',mul:5},
-  {day:7,icon:'💎',name:'×15',type:'stone',mul:15}
+  {day:6,icon:'🪙',name:'×6',type:'stone',mul:6},
+  {day:7,icon:'💎',name:'×11',type:'stone',mul:11}
 ];
+/* ============ 每日答题（凡间商道） ============ */
+const DAILY_QUIZ_COUNT = 3;                // 每天抽题数
+const QUIZ_REWARD_MULT = {                 // 正确率 → 奖励系数
+  3: 0.8,
+  2: 0.5,
+  1: 0.2,
+  0: 0.05
+};
 
 /* ============ 14 亿里程碑 ============ */
 const MILESTONES=[
@@ -155,7 +166,7 @@ const MILESTONES=[
 ];
 
 /* ============ 弟子上限阈值 ============ */
-const DISCIPLE_THRESHOLDS=[15,45,100,170,250];
+const DISCIPLE_THRESHOLDS=[30, 90, 200, 350, 500];
 
 /* ============ 离线惊喜 ============ */
 const OFFLINE_FLAVORS=[
@@ -271,6 +282,28 @@ const SPECIALTIES=[
   {id:'merchant', n:'商修', ic:'💰', desc:'毛产出 +12%', stoneMul:1.12},
   {id:'body',     n:'体修', ic:'🛡️', desc:'受伤时间 -50%，修为 +5%', injuryMul:0.5, expMul:1.05}
 ];
+/* ============ 弟子状态（长尾后果） ============ */
+const STATE_TYPES={
+  injury:        {id:'injury',        n:'旧伤',     ic:'🩹', color:'#e58a8a', desc:'修为速度 -30%',                expMul:0.70, breakAdd:0,      breakMul:1,     duration:3*86400000},
+  heart_demon:   {id:'heart_demon',   n:'心魔',     ic:'🌑', color:'#c088dd', desc:'突破率 -50%',                 expMul:1.00, breakAdd:0,      breakMul:0.50,  duration:7*86400000},
+  obsession:     {id:'obsession',     n:'执念',     ic:'🔥', color:'#e6a877', desc:'修为 +20%，突破 -10%',        expMul:1.20, breakAdd:-0.10,  breakMul:1,     duration:5*86400000},
+  enlightenment: {id:'enlightenment', n:'顿悟',     ic:'💡', color:'#e6c473', desc:'修为速度 +50%',                expMul:1.50, breakAdd:0,      breakMul:1,     duration:24*3600*1000},
+  dao_heart:     {id:'dao_heart',     n:'道心通明', ic:'✨', color:'#7dd99d', desc:'突破率 +20%',                 expMul:1.00, breakAdd:0.20,   breakMul:1,     duration:3*86400000},
+  hedao:         {id:'hedao',         n:'合道期',   ic:'☯️', color:'#e6c473', desc:'突破 +40%，修为 +30%',         expMul:1.30, breakAdd:0.40,   breakMul:1,     duration:3*86400000},
+  seclusion:     {id:'seclusion',     n:'闭关',     ic:'🧘', color:'#7ab8c4', desc:'突破 +60%，修为 -20%',         expMul:0.80, breakAdd:0.60,   breakMul:1,     duration:3*86400000}
+};
+
+/* 事件结果 → 长尾状态（默认规则）
+ * 每个 outcome 可选 positive / negative 池，池内按 w 权重抽。
+ * 概率是"是否附加"的概率，不是抽中的概率。 */
+const STATE_RULES={
+  great:{prob:0.60,positive:[{s:'enlightenment',w:50},{s:'dao_heart',w:30},{s:'hedao',w:15},{s:'seclusion',w:5}]},
+  good: {prob:0.25,positive:[{s:'enlightenment',w:80},{s:'seclusion',w:20}]},
+  ok:   {prob:0},
+  bad:  {prob:0.50,negative:[{s:'injury',w:70},{s:'obsession',w:30}]},
+  awful:{prob:0.75,negative:[{s:'injury',w:50},{s:'heart_demon',w:50}]}
+};
+
 const APTITUDES=[
   {id:'low',n:'下等',mul:0.7,w:22,color:'#8a9ca6'},
   {id:'mid',n:'中等',mul:1.0,w:42,color:'#7ab8c4'},
@@ -278,7 +311,13 @@ const APTITUDES=[
   {id:'genius',n:'天才',mul:2.0,w:9,color:'#e6c473'},
   {id:'monster',n:'妖孽',mul:3.0,w:3,color:'#c088dd'}
 ];
-const GIFT_BASE={low:[1,3],mid:[2,6],high:[5,15],genius:[10,25],monster:[20,50]};
+const GIFT_BASE={
+  low:[5,10],
+  mid:[10,25],
+  high:[25,60],
+  genius:[60,150],
+  monster:[150,400]
+};
 const ROOTS=[
   {id:'metal',n:'金',ic:'⚔️',tag:'破竹',bonus:'突破 +5%',color:'#e6dd8a',breakBonus:0.05},
   {id:'wood',n:'木',ic:'🌿',tag:'长生',bonus:'修为 +10%',color:'#7dd99d',expMul:1.10},
@@ -389,11 +428,11 @@ const ACHIEVEMENTS=[
 
 /* ============ 建筑 ============ */
 const BUILDINGS=[
-  {key:'scripture',n:'藏经阁',ic:'📜',desc:'提升全体弟子修为速度',max:20,effect:lv=>'修为 +'+(lv*10)+'%'},
-  {key:'alchemy',n:'炼丹房',ic:'⚗️',desc:'提升事件成功率',max:20,effect:lv=>'事件成功 +'+(lv*2)+'%'},
-  {key:'arena',n:'演武场',ic:'⚔️',desc:'提升突破成功率',max:20,effect:lv=>'突破 +'+(lv*1.5).toFixed(1)+'%'},
-  {key:'array',n:'护山大阵',ic:'🔮',desc:'减少负面事件概率',max:10,effect:lv=>'负面 -'+(lv*5)+'%'},
-  {key:'cave',n:'洞府',ic:'🏔️',desc:'提升修为和毛速度',max:100,effect:lv=>'修为 +'+(lv*20)+'%，毛 +'+(lv*12)+'%'}
+  {key:'scripture',n:'藏经阁',ic:'📜',desc:'提升全体弟子修为速度',max:50,effect:lv=>'修为 +'+(lv*5)+'%'},
+  {key:'alchemy',n:'炼丹房',ic:'⚗️',desc:'提升事件成功率',max:50,effect:lv=>'事件成功 +'+(lv*1)+'%'},
+  {key:'arena',n:'演武场',ic:'⚔️',desc:'提升突破成功率',max:50,effect:lv=>'突破 +'+(lv*1)+'%'},
+  {key:'array',n:'护山大阵',ic:'🔮',desc:'减少负面事件概率',max:20,effect:lv=>'负面 -'+(lv*2.5)+'%'},
+  {key:'cave',n:'洞府',ic:'🏔️',desc:'提升修为和毛速度',max:200,effect:lv=>'修为 +'+(lv*10)+'%，毛 +'+(lv*6)+'%'}
 ];
 
 /* ============ 掌门月令 ============ */
@@ -502,6 +541,137 @@ function eventScale(d){
 function evStone(sc,mul){return Math.max(1,Math.floor(sc.stone*(mul||1)))}
 function evExp(sc,mul){return Math.max(1,Math.floor(sc.exp*(mul||1)))}
 
+/* ============ 状态剧情 ============ */
+const STATE_STORY_TEMPLATES=[
+  /* ===== 旧伤 ===== */
+  {id:'state_injury',title:'旧伤未愈',stateType:'injury',weight:50,
+   build(sc,d){return{ask:d.name+'旧伤未愈，却仍在苦修。弟子们看了都劝他歇一歇。',choices:[
+     {n:'令他休养',tag:'safe',tagText:'稳妥',desc:'停下修炼，专心养伤',
+      outcomes:{
+        great:{w:2,clearState:'injury',loyalty:8,exp:-evExp(sc,0.3),text:'弟子听话歇了几日，旧伤痊愈。'},
+        good: {w:4,clearState:'injury',loyalty:5,exp:-evExp(sc,0.5),text:'养了几天，伤好了。'},
+        ok:   {w:3,clearState:'injury',loyalty:2,text:'弟子勉强歇下，伤渐渐好了。'},
+        bad:  {w:1,loyalty:1,text:'弟子嘴上答应，第二天又去修炼了。'},
+        awful:{w:1,loyalty:-3,text:'弟子觉得你小看他，赌气跑了。'}}},
+     {n:'令他继续',tag:'risky',tagText:'激进',desc:'鼓励他坚持修行',
+      outcomes:{
+        great:{w:1,exp:evExp(sc,1.5),loyalty:5,text:'弟子越练越勇，旧伤反而成了磨砺。'},
+        good: {w:3,exp:evExp(sc,0.6),text:'弟子咬牙坚持下来了。'},
+        ok:   {w:3,exp:evExp(sc,0.2),text:'勉力修行。'},
+        bad:  {w:2,addState:'injury',text:'旧伤复发。'},
+        awful:{w:1,addState:'heart_demon',exp:-evExp(sc,0.3),text:'伤痛未愈，心魔又起。'}}}
+   ]}}},
+
+  /* ===== 心魔 ===== */
+  {id:'state_heart_demon',title:'心魔缠身',stateType:'heart_demon',weight:50,
+   build(sc,d){return{ask:d.name+'近来常常独自发呆，修炼时也心不在焉。看来是有什么心事。',choices:[
+     {n:'唤来开解',tag:'safe',tagText:'稳妥',desc:'亲自与弟子谈一谈',
+      outcomes:{
+        great:{w:2,clearState:'heart_demon',loyalty:12,text:'一番长谈，弟子眼睛亮了。心结解了。'},
+        good: {w:4,clearState:'heart_demon',loyalty:6,text:'弟子听了你的话，长长地出了口气。'},
+        ok:   {w:3,clearState:'heart_demon',loyalty:2,text:'弟子点了点头，回去了。'},
+        bad:  {w:1,loyalty:3,text:'弟子什么也没说，但好像好了一些。'},
+        awful:{w:1,loyalty:-5,text:'弟子觉得你根本不理解他。'}}},
+     {n:'令其闭关',tag:'safe',tagText:'保守',desc:'让他自己想通',
+      outcomes:{
+        great:{w:1,clearState:'heart_demon',exp:evExp(sc,1.2),text:'弟子闭关七日，出关时目光清明。'},
+        good: {w:3,clearState:'heart_demon',exp:evExp(sc,0.5),text:'弟子自己走出来了。'},
+        ok:   {w:4,exp:evExp(sc,0.2),text:'弟子继续闭关。'},
+        bad:  {w:2,addState:'injury',text:'弟子不吃不喝，身子垮了。'},
+        awful:{w:1,addState:'heart_demon',loyalty:-5,text:'心魔越缠越深。'}}}
+   ]}}},
+
+  /* ===== 执念 ===== */
+  {id:'state_obsession',title:'执念入魔',stateType:'obsession',weight:40,
+   build(sc,d){return{ask:d.name+'这两日像疯了一样修炼，连饭都不吃了。',choices:[
+     {n:'由他去',tag:'safe',tagText:'保守',desc:'执念也是一种动力',
+      outcomes:{
+        great:{w:2,exp:evExp(sc,1.5),text:'他练成了点什么。'},
+        good: {w:4,exp:evExp(sc,0.7),text:'他还在练。'},
+        ok:   {w:3,exp:evExp(sc,0.3),text:'他继续埋头苦修。'},
+        bad:  {w:2,clearState:'obsession',exp:evExp(sc,0.1),text:'他终于撑不住，睡了三天。'},
+        awful:{w:1,addState:'injury',text:'他把自己练伤了。'}}},
+     {n:'强行制止',tag:'risky',tagText:'激进',desc:'喝令他停下来',
+      outcomes:{
+        great:{w:2,clearState:'obsession',loyalty:8,text:'他被你镇住了，喘着气坐了下来。'},
+        good: {w:3,clearState:'obsession',loyalty:4,text:'他愣愣地看着你，然后点点头。'},
+        ok:   {w:3,clearState:'obsession',text:'他停下来了。'},
+        bad:  {w:2,loyalty:-3,text:'他很生气，但没敢顶撞。'},
+        awful:{w:1,addState:'heart_demon',loyalty:-8,text:'他觉得自己被否定了，从此沉默。'}}}
+   ]}}},
+
+  /* ===== 顿悟 ===== */
+  {id:'state_enlightenment',title:'顿悟之时',stateType:'enlightenment',weight:60,
+   build(sc,d){return{ask:d.name+'前几日突然顿悟，此刻正坐在后山，周身灵气不散。',choices:[
+     {n:'助他闭关',tag:'safe',tagText:'稳妥',desc:'让他借势冲击境界',
+      outcomes:{
+        great:{w:2,exp:evExp(sc,2.5),text:'弟子借势突破了。'},
+        good: {w:4,exp:evExp(sc,1.2),text:'弟子修为大进。'},
+        ok:   {w:3,exp:evExp(sc,0.5),text:'弟子受益。'},
+        bad:  {w:1,exp:evExp(sc,0.1),text:'灵气渐渐散了。'},
+        awful:{w:1,clearState:'enlightenment',text:'灵气散了，弟子的顿悟也断了。'}}},
+     {n:'顺其自然',tag:'safe',tagText:'保守',desc:'不打扰他',
+      outcomes:{
+        great:{w:1,exp:evExp(sc,1.5),text:'弟子自己抓到了那一线。'},
+        good: {w:4,exp:evExp(sc,0.6),text:'弟子安静地坐着，一切都好。'},
+        ok:   {w:4,exp:evExp(sc,0.2),text:'弟子坐了半天。'},
+        bad:  {w:1,exp:evExp(sc,0.05),text:'弟子醒来，忘了大半。'},
+        awful:{w:1,clearState:'enlightenment',text:'弟子自己走神了。'}}}
+   ]}}},
+
+  /* ===== 道心通明 ===== */
+  {id:'state_dao_heart',title:'道心通明',stateType:'dao_heart',weight:60,
+   build(sc,d){return{ask:d.name+'这几日道心通明，看什么都通透。弟子们都想向他请教。',choices:[
+     {n:'令他授业',tag:'safe',tagText:'稳妥',desc:'让他带带师弟师妹',
+      outcomes:{
+        great:{w:2,exp:evExp(sc,0.8),loyalty:10,text:'他讲得极好，宗门上下都受益。'},
+        good: {w:4,exp:evExp(sc,0.3),loyalty:5,text:'他带着大家修炼。'},
+        ok:   {w:3,exp:evExp(sc,0.1),text:'他讲了半天。'},
+        bad:  {w:1,clearState:'dao_heart',loyalty:-3,text:'他觉得自己被打扰了。'},
+        awful:{w:1,clearState:'dao_heart',text:'他被问烦了，拂袖而去。'}}},
+     {n:'让他自己修行',tag:'safe',tagText:'保守',desc:'珍惜这段机缘',
+      outcomes:{
+        great:{w:1,exp:evExp(sc,2),text:'他趁着道心通明，又进一层。'},
+        good: {w:3,exp:evExp(sc,0.8),text:'他受益匪浅。'},
+        ok:   {w:4,exp:evExp(sc,0.3),text:'他安静修行。'},
+        bad:  {w:1,exp:evExp(sc,0.1),text:'通明渐退。'},
+        awful:{w:1,clearState:'dao_heart',text:'机缘过去了。'}}}
+   ]}}},
+
+  /* ===== 合道期 ===== */
+  {id:'state_hedao',title:'合道之机',stateType:'hedao',weight:40,
+   build(sc,d){return{ask:d.name+'这几日与天地相合，周身道韵流转，连呼吸都带着一股说不出的味道。',choices:[
+     {n:'令他巩固',tag:'safe',tagText:'稳妥',desc:'稳住这个状态',outcomes:{
+       great:{w:2,exp:evExp(sc,2),text:'他借合道之势又进一层。'},
+       good: {w:4,exp:evExp(sc,1),text:'他静静地坐了七日。'},
+       ok:   {w:3,exp:evExp(sc,0.3),text:'他保持住了这个状态。'},
+       bad:  {w:1,exp:evExp(sc,0.1),text:'道韵渐散，他睁开了眼。'},
+       awful:{w:1,clearState:'hedao',text:'合道之势散了。'}}},
+     {n:'令他出手',tag:'risky',tagText:'激进',desc:'趁势做一件大事',outcomes:{
+       great:{w:1,exp:evExp(sc,4),stone:evStone(sc,2),text:'他出手一次，天下震动。'},
+       good: {w:3,exp:evExp(sc,1.5),stone:evStone(sc,0.8),text:'他不负所托。'},
+       ok:   {w:3,exp:evExp(sc,0.5),text:'他办成了。'},
+       bad:  {w:2,clearState:'hedao',exp:-evExp(sc,0.3),text:'事情成了，但合道之势散了。'},
+       awful:{w:1,clearState:'hedao',exp:-evExp(sc,0.8),text:'他强行出手，伤了道基。'}}}
+   ]}}},
+
+  /* ===== 闭关 ===== */
+  {id:'state_seclusion',title:'闭关中',stateType:'seclusion',weight:60,
+   build(sc,d){return{ask:d.name+'已经闭关两日，尚未出关。弟子们议论纷纷。',choices:[
+     {n:'不打扰',tag:'safe',tagText:'稳妥',desc:'让他继续闭关',outcomes:{
+       great:{w:2,exp:evExp(sc,2.5),text:'他出关时，气质已然不同。'},
+       good: {w:4,exp:evExp(sc,1),text:'他安静地闭关。'},
+       ok:   {w:3,exp:evExp(sc,0.3),text:'他在里面待着。'},
+       bad:  {w:1,exp:evExp(sc,0.05),text:'没什么进展。'},
+       awful:{w:1,clearState:'seclusion',text:'他闷得慌，自己出来了。'}}},
+     {n:'催他出关',tag:'risky',tagText:'激进',desc:'有要事相商',outcomes:{
+       great:{w:1,exp:evExp(sc,1.5),loyalty:5,text:'他应声出关，事情办得漂亮。'},
+       good: {w:3,exp:evExp(sc,0.5),text:'他出来了。'},
+       ok:   {w:3,clearState:'seclusion',text:'他出关了。'},
+       bad:  {w:2,clearState:'seclusion',loyalty:-3,text:'他出关，但神情有些烦躁。'},
+       awful:{w:1,clearState:'seclusion',loyalty:-8,text:'他刚有所悟，被硬生生打断了。'}}}
+   ]}}}
+];
 const EVENT_TEMPLATES=[
   {id:'village_visit',title:'山下来客',minLv:0,chainId:'village',chainStep:1,build(sc){const gift=evStone(sc,0.15);return{ask:'山下村庄的里正带着几袋米面来拜访。',choices:[
     {n:'全数收下',tag:'safe',tagText:'保守',desc:'收下礼物',outcomes:{great:{w:2,exp:evExp(sc,0.5),text:'里正还带来一坛自酿的酒。'},good:{w:5,exp:evExp(sc,0.3),text:'弟子们饱餐一顿。'},ok:{w:3,exp:evExp(sc,0.1),text:'收下了。'},bad:{w:2,exp:0,text:'米面有点陈。'},awful:{w:1,exp:-evExp(sc,0.05),text:'米里有虫。'}}},
@@ -526,15 +696,15 @@ const EVENT_TEMPLATES=[
     {n:'静听',tag:'safe',tagText:'保守',desc:'什么也不做',outcomes:{great:{w:2,exp:evExp(sc,0.8),text:'一夜开悟。'},good:{w:4,exp:evExp(sc,0.4),text:'心静如水。'},ok:{w:3,exp:evExp(sc,0.1),text:'普通钟声。'},bad:{w:1,exp:0,text:'睡着了。'},awful:{w:1,exp:-evExp(sc,0.1),text:'一夜未眠。'}}},
     {n:'不理会',tag:'safe',tagText:'保守',desc:'继续修行',outcomes:{great:{w:1,exp:evExp(sc,0.5),text:'心境更高。'},good:{w:4,exp:evExp(sc,0.1),text:'继续修炼。'},ok:{w:4,exp:0,text:'平平无奇。'},bad:{w:1,exp:-evExp(sc,0.05),text:'错过什么。'},awful:{w:1,exp:-evExp(sc,0.1),text:'心神不宁。'}}}
   ]}}},
-  {id:'oldbook',title:'旧书残卷',minLv:0,build(sc){const buy=evStone(sc,0.25);return{ask:'弟子在旧货堆里翻到一本残缺的古书。',choices:[
+  {id:'oldbook',title:'旧书残卷',minLv:0,personalities:['diligent','clever'],build(sc){const buy=evStone(sc,0.25);return{ask:'弟子在旧货堆里翻到一本残缺的古书。',choices:[
     {n:'买下',tag:'cost',tagText:'花费',desc:'花 '+buy+' 毛',cost:buy,outcomes:{great:{w:1,exp:evExp(sc,3),text:'残缺功法！'},good:{w:3,exp:evExp(sc,1),text:'有些真东西。'},ok:{w:3,exp:evExp(sc,0.3),text:'没什么大用。'},bad:{w:2,exp:0,text:'一本破书。'},awful:{w:1,exp:-evExp(sc,0.3),text:'假书。'}}},
     {n:'不买',tag:'safe',tagText:'保守',desc:'省钱',outcomes:{great:{w:1,exp:evExp(sc,0.5),text:'心无旁骛。'},good:{w:3,exp:evExp(sc,0.1),text:'继续逛。'},ok:{w:4,exp:0,text:'平平无奇。'},bad:{w:1,exp:-evExp(sc,0.05),text:'后悔。'},awful:{w:1,exp:-evExp(sc,0.1),text:'后知后觉。'}}}
   ]}}},
-  {id:'spirit_vein',title:'发现灵脉',minLv:3,build(sc){const agg=evStone(sc,0.6);return{ask:'弟子在后山发现一处灵脉。',choices:[
+  {id:'spirit_vein',title:'发现灵脉',minLv:3,specialties:['merchant','artifact'],build(sc){const agg=evStone(sc,0.6);return{ask:'弟子在后山发现一处灵脉。',choices:[
     {n:'开采',tag:'risky',tagText:'激进',desc:'花 '+agg+' 毛',cost:agg,outcomes:{great:{w:1,stone:evStone(sc,2.5),exp:evExp(sc,2),text:'大赚一笔！'},good:{w:4,stone:evStone(sc,1),exp:evExp(sc,0.6),text:'小赚一笔。'},ok:{w:2,stone:evStone(sc,0.4),text:'品质一般。'},bad:{w:2,stone:-Math.floor(agg*0.4),text:'比预想的差。'},awful:{w:1,stone:-agg,text:'损失惨重。'}}},
     {n:'放弃',tag:'safe',tagText:'保守',desc:'专心修炼',outcomes:{great:{w:1,exp:evExp(sc,0.8),text:'偶有所悟。'},good:{w:3,exp:0,text:'继续修炼。'},ok:{w:4,exp:0,text:'平平无奇。'},bad:{w:1,exp:-evExp(sc,0.05),text:'有些遗憾。'},awful:{w:1,exp:-evExp(sc,0.15),text:'想不开。'}}}
   ]}}},
-  {id:'beast',title:'灵兽出没',minLv:5,build(sc){const bait=evStone(sc,0.2);return{ask:'弟子发现一只灵兽。',choices:[
+  {id:'beast',title:'灵兽出没',minLv:5,specialties:['body','sword'],build(sc){const bait=evStone(sc,0.2);return{ask:'弟子发现一只灵兽。',choices:[
     {n:'收服',tag:'risky',tagText:'激进',desc:'花 '+bait+' 毛买灵饵',cost:bait,outcomes:{great:{w:2,exp:evExp(sc,2.5),text:'成功收服！'},good:{w:3,exp:evExp(sc,1),text:'留了块灵玉。'},ok:{w:2,exp:evExp(sc,0.3),text:'灵兽跑了。'},bad:{w:2,exp:-evExp(sc,0.4),text:'灵饵白费。'},awful:{w:1,exp:-evExp(sc,0.8),text:'弟子受伤。'}}},
     {n:'观察',tag:'info',tagText:'观察',desc:'不打扰',outcomes:{great:{w:2,exp:evExp(sc,1),stone:evStone(sc,0.6),text:'悟到小术。'},good:{w:4,exp:evExp(sc,0.4),text:'有所得。'},ok:{w:3,exp:0,text:'没看出什么。'},bad:{w:1,exp:0,text:'灵兽走了。'},awful:{w:1,exp:-evExp(sc,0.3),text:'被追着跑。'}}}
   ]}}},
@@ -578,7 +748,10 @@ const EVENT_TEMPLATES=[
     {n:'恭敬迎接',tag:'safe',tagText:'稳妥',desc:'以礼相待',outcomes:{great:{w:1,exp:evExp(sc,6),text:'指点一番！'},good:{w:3,exp:evExp(sc,2.5),text:'留下偈语。'},ok:{w:3,exp:evExp(sc,0.6),text:'走了。'},bad:{w:2,exp:0,text:'没说话。'},awful:{w:1,exp:-evExp(sc,0.5),text:'失礼。'}}},
     {n:'远远行礼',tag:'safe',tagText:'保守',desc:'不打扰',outcomes:{great:{w:1,exp:evExp(sc,2),text:'微微点头。'},good:{w:4,exp:evExp(sc,0.8),text:'感受到敬意。'},ok:{w:4,exp:evExp(sc,0.15),text:'走了。'},bad:{w:1,exp:0,text:'没发生什么。'},awful:{w:1,exp:-evExp(sc,0.3),text:'觉得太拘谨。'}}}
   ]}}}  ,
-  {id:'lost_letter',title:'一封家书',minLv:3,build(sc){return{ask:'弟子收到一封家书，说家中老母病重。',choices:[
+  {id:'lost_letter',title:'一封家书',minLv:3,stateOn:{
+    bad:{state:'heart_demon',text:'弟子嘴上不说，心里却结了个疙瘩。'},
+    awful:{state:'heart_demon',text:'老母已故，弟子道心蒙尘。'}
+  },build(sc){return{ask:'弟子收到一封家书，说家中老母病重。',choices:[
     {n:'准他归家',tag:'safe',tagText:'稳妥',desc:'停修三日',outcomes:{great:{w:2,exp:evExp(sc,1.5),loyalty:15,text:'弟子归家侍疾，回来时眼中带光。'},good:{w:4,exp:evExp(sc,0.6),loyalty:8,text:'家人已愈，弟子安心归来。'},ok:{w:3,exp:0,loyalty:3,text:'来回奔波，略感疲惫。'},bad:{w:1,exp:-evExp(sc,0.2),text:'归途遇雨。'},awful:{w:1,exp:-evExp(sc,0.4),loyalty:-5,text:'老母已故，弟子心碎。'}}},
     {n:'留他修行',tag:'cost',tagText:'代价',desc:'修为优先',outcomes:{great:{w:1,exp:evExp(sc,3),loyalty:-8,text:'弟子面无表情地打坐了一夜。'},good:{w:3,exp:evExp(sc,1.5),loyalty:-5,text:'他什么也没说。'},ok:{w:4,exp:evExp(sc,0.5),loyalty:-3,text:'默默修炼。'},bad:{w:2,exp:0,loyalty:-10,text:'心中有了结。'},awful:{w:1,exp:-evExp(sc,0.5),loyalty:-15,text:'他开始怀疑修行意义。'}}}
   ]}}},
@@ -586,7 +759,9 @@ const EVENT_TEMPLATES=[
     {n:'陪他喝',tag:'cost',tagText:'花费',desc:'花 '+cost+' 毛',cost:cost,outcomes:{great:{w:1,exp:evExp(sc,3),text:'老者大笑，留下一句口诀飘然下山。'},good:{w:3,exp:evExp(sc,1.2),text:'老者醉话中似有真意。'},ok:{w:3,exp:evExp(sc,0.3),text:'喝得尽兴。'},bad:{w:2,exp:0,text:'老者醉倒，弟子扶他下山。'},awful:{w:1,exp:-evExp(sc,0.3),text:'老者撒酒疯，砸了演武场。'}}},
     {n:'请他喝茶',tag:'safe',tagText:'保守',desc:'以茶代酒',outcomes:{great:{w:1,exp:evExp(sc,1),text:'老者点头称赞「有道气」。'},good:{w:4,exp:evExp(sc,0.3),text:'老者喝完就走了。'},ok:{w:4,exp:0,text:'平平无奇。'},bad:{w:2,exp:-evExp(sc,0.1),text:'老者嫌茶淡。'},awful:{w:1,exp:-evExp(sc,0.2),text:'老者拂袖而去。'}}}
   ]}}},
-  {id:'fox_spirit',title:'狐影',minLv:15,build(sc){return{ask:'夜里，有弟子在后山看到一只白狐。',choices:[
+  {id:'fox_spirit',title:'狐影',minLv:15,personalities:['fated','romantic'],stateOn:{
+    awful:{state:'heart_demon',text:'幻术虽解，心魔难消。'}
+  },build(sc){return{ask:'夜里，有弟子在后山看到一只白狐。',choices:[
     {n:'追上去',tag:'risky',tagText:'激进',desc:'赌一把',outcomes:{great:{w:1,exp:evExp(sc,3),stone:evStone(sc,1),text:'白狐化作少女，送了一枚灵果。'},good:{w:3,exp:evExp(sc,1),text:'白狐停下看了他一眼，跑了。'},ok:{w:3,exp:evExp(sc,0.3),text:'追丢了。'},bad:{w:2,exp:-evExp(sc,0.3),text:'迷路了。'},awful:{w:1,exp:-evExp(sc,0.8),loyalty:-3,text:'被幻术所惑，三日方醒。'}}},
     {n:'不去打扰',tag:'safe',tagText:'保守',desc:'各安天命',outcomes:{great:{w:2,exp:evExp(sc,0.8),text:'白狐临走前回望一眼。'},good:{w:4,exp:evExp(sc,0.3),text:'什么也没发生。'},ok:{w:3,exp:0,text:'平平无奇。'},bad:{w:1,exp:-evExp(sc,0.05),text:'有点后悔。'},awful:{w:1,exp:-evExp(sc,0.1),text:'夜里睡不着。'}}}
   ]}}},
@@ -594,11 +769,13 @@ const EVENT_TEMPLATES=[
     {n:'出面调解',tag:'safe',tagText:'稳妥',desc:'做和事佬',outcomes:{great:{w:2,exp:evExp(sc,1),stone:evStone(sc,0.8),loyalty:3,text:'双方都卖掌门面子。'},good:{w:4,exp:evExp(sc,0.4),text:'事情平息。'},ok:{w:3,exp:0,text:'各回各家。'},bad:{w:1,exp:-evExp(sc,0.2),text:'被说偏心。'},awful:{w:1,exp:-evExp(sc,0.5),text:'双方都记恨宗门。'}}},
     {n:'偏帮村民',tag:'risky',tagText:'激进',desc:'站在山下人一边',outcomes:{great:{w:2,exp:evExp(sc,1.2),stone:evStone(sc,1.2),text:'村民感恩戴德。'},good:{w:3,exp:evExp(sc,0.5),text:'邻宗忍气吞声。'},ok:{w:3,exp:0,text:'不了了之。'},bad:{w:2,exp:-evExp(sc,0.3),text:'邻宗记恨。'},awful:{w:1,exp:-evExp(sc,0.6),stone:-evStone(sc,0.4),text:'引起两宗纷争。'}}}
   ]}}},
-  {id:'dream_ancestor',title:'梦见祖师',minLv:20,build(sc){return{ask:'弟子说他梦到了宗门祖师。',choices:[
+  {id:'dream_ancestor',title:'梦见祖师',minLv:20,personalities:['fated'],build(sc){return{ask:'弟子说他梦到了宗门祖师。',choices:[
     {n:'让他细说',tag:'safe',tagText:'稳妥',desc:'听梦',outcomes:{great:{w:1,exp:evExp(sc,4),text:'梦中口诀，醒来竟是真法。'},good:{w:3,exp:evExp(sc,1.2),text:'梦境清晰，有所领悟。'},ok:{w:4,exp:evExp(sc,0.3),text:'醒来只记得一个模糊背影。'},bad:{w:2,exp:0,text:'什么也想不起来。'},awful:{w:1,exp:-evExp(sc,0.3),loyalty:-3,text:'弟子开始疑神疑鬼。'}}},
     {n:'不必在意',tag:'safe',tagText:'保守',desc:'梦而已',outcomes:{great:{w:1,exp:evExp(sc,0.5),text:'弟子自己悟了。'},good:{w:4,exp:evExp(sc,0.2),text:'继续修炼。'},ok:{w:4,exp:0,text:'平平无奇。'},bad:{w:1,exp:-evExp(sc,0.05),text:'弟子有点失落。'},awful:{w:1,exp:-evExp(sc,0.2),loyalty:-3,text:'弟子觉得掌门不重视他。'}}}
   ]}}},
-  {id:'mountain_slide',title:'山体滑坡',minLv:25,build(sc){const cost=evStone(sc,0.6);return{ask:'连日暴雨，后山有滑坡迹象。',choices:[
+  {id:'mountain_slide',title:'山体滑坡',minLv:25,stateOn:{
+    awful:{state:'injury',text:'弟子们在抢险中受了伤。'}
+  },build(sc){const cost=evStone(sc,0.6);return{ask:'连日暴雨，后山有滑坡迹象。',choices:[
     {n:'派人加固',tag:'cost',tagText:'花费',desc:'花 '+cost+' 毛',cost:cost,outcomes:{great:{w:3,stone:evStone(sc,1.5),exp:evExp(sc,1),text:'弟子筑起石墙，宗门无恙。'},good:{w:5,exp:evExp(sc,0.5),text:'勉强稳住。'},ok:{w:2,exp:evExp(sc,0.2),text:'有惊无险。'},bad:{w:2,stone:-Math.floor(cost*0.3),text:'损失部分物资。'},awful:{w:1,stone:-cost,exp:-evExp(sc,0.8),text:'滑坡冲毁了演武场。'}}},
     {n:'按兵不动',tag:'risky',tagText:'激进',desc:'赌雨停',outcomes:{great:{w:1,exp:evExp(sc,0.8),text:'雨停了，虚惊一场。'},good:{w:3,exp:evExp(sc,0.3),text:'雨势渐小。'},ok:{w:4,exp:0,text:'没出事。'},bad:{w:2,exp:-evExp(sc,0.4),text:'部分弟子受伤。'},awful:{w:1,exp:-evExp(sc,1),loyalty:-5,text:'宗门设施损毁严重。'}}}
   ]}}},
@@ -619,7 +796,7 @@ function buildDynamicEvent(tpl,top){
   const sc=eventScale(top);
   if(tpl.requires&&s.discipleList.length<tpl.requires)return null;
   try{
-    const b=tpl.build(sc,top?top.level:0);
+    const b=tpl.build(sc,top);
     if(!b||!b.choices)return null;
     const curStone=s.stones.toNum();
     const aff=b.choices.filter(c=>!c.cost||c.cost<=curStone*0.8);
@@ -634,10 +811,34 @@ const force=s.reportsSinceEvent>=CONFIG.eventForceInterval;
 if(!force&&s.reportsSinceEvent<CONFIG.eventMinInterval)return null;
 if(!force&&Math.random()>CONFIG.eventChance)return null;
   s.reportsSinceEvent=0;
-  const lvl=top.level;
   if(!s.eventChain)s.eventChain={};
+  // === 选定本次事件的主角弟子 ===
+  // 首席 60% 概率主导，其余由其他在宗门弟子分担
+  const others=s.discipleList.filter(d=>d.id!==top.id&&!isOnExpedition(d)&&!isInMijing(d));
+  let actor=top;
+  if(others.length>0&&Math.random()<0.4)actor=pick(others);
+  const lvl=actor.level;
+  // === 优先状态剧情：弟子身上有活跃状态时，50% 概率先抽状态剧情 ===
+  const _activeSt=getActiveStates(actor);
+  if(_activeSt.length>0&&Math.random()<0.5){
+    const matching=STATE_STORY_TEMPLATES.filter(t=>_activeSt.some(st=>st.id===t.stateType));
+    if(matching.length>0){
+      const st=weightedPick(matching,'weight');
+      const ev=buildDynamicEvent(st,actor);
+      if(ev){
+        ev.discipleId=actor.id;
+        ev.discipleName=actor.name;
+        ev.stateStory=true;
+        return ev;
+      }
+    }
+  }
   const cands=EVENT_TEMPLATES.filter(e=>{
     if(e.minLv&&lvl<e.minLv)return false;
+    // === 按性格过滤（模板未指定则不限） ===
+    if(e.personalities&&e.personalities.length>0&&!e.personalities.includes(actor.personality))return false;
+    // === 按专精过滤（模板未指定则不限） ===
+    if(e.specialties&&e.specialties.length>0&&!e.specialties.includes(actor.specialty))return false;
     if(e.chainId){
       const cur=s.eventChain[e.chainId]||0;
       if(cur<e.chainStep-1)return false;
@@ -651,8 +852,15 @@ if(!force&&Math.random()>CONFIG.eventChance)return null;
   if(pool.length<2)pool=cands.slice();
   const sh=shuffle(pool);
   for(const t of sh){
-    const ev=buildDynamicEvent(t,top);
-    if(ev){s.recentEvents.push(t.id);if(s.recentEvents.length>5)s.recentEvents.shift();return ev}
+    const ev=buildDynamicEvent(t,actor);
+    if(ev){
+      // === 把主角弟子绑进事件里 ===
+      ev.discipleId=actor.id;
+      ev.discipleName=actor.name;
+      s.recentEvents.push(t.id);
+      if(s.recentEvents.length>5)s.recentEvents.shift();
+      return ev;
+    }
   }
   return null;
 }
@@ -705,6 +913,7 @@ function estimateOutcomeChance(choice,d){
     bad:w.bad/total,
     awful:w.awful/total,
     success:(w.great+w.good)/total,
+    safe:(w.great+w.good+w.ok)/total,
     risk:w.awful/total
   };
 }
@@ -776,4 +985,369 @@ const ENDINGS=[
   {id:'collected',title:'收 齐 了',icon:'🌟',condition:s=>s.stones.gte(Dec.of(TARGET_MAO)),text:'你站在山巅，看着账本。\n14 亿毛，一毛不少。\n\n弟子们站在你身后，谁都没说话。\n风吹过来，翻到账本最后一页——\n\n你笑了。\n\n「这只是开始。」'},
   {id:'reincarnate',title:'五 世 轮 回',icon:'♻️',condition:s=>s.eras>=5&&s.stones.lt(Dec.of(TARGET_MAO)),text:'五世转生，你依然没收到 14 亿毛。\n\n一个弟子走上前，轻声问：\n「掌门，我们还继续吗？」\n\n你看着他，看了很久。\n然后点了点头。\n\n「继续。」'},
   {id:'legacy',title:'薪 火',icon:'🕯️',condition:s=>s.relics&&s.relics.length>=10,text:'十个弟子化道，留下十件遗物。\n\n你把它们摆在藏经阁最深处。\n新入门的弟子问：\n「掌门，这些都是谁？」\n\n你一件一件地说：\n「这是张云的剑。\n这是李雨的玉佩。\n这是……」\n\n你说到一半，停下了。\n\n「……他们都很好。」'}
+];
+
+/* ============ 凡间商道 · 理财问答题库 ============ */
+const QUIZ_BANK = [
+  // ===== 基础理财概念（10 道）=====
+  { question: '分散投资主要为了？', options: ['提高收益', '降低单一风险', '消除全部风险'], answer: 1, explain: '分散投资只能降低单一资产带来的非系统性风险，无法消除系统性风险。' },
+  { question: '收益越高，通常风险？', options: ['越低', '不变', '越高'], answer: 2, explain: '收益与风险成正比，高收益往往伴随着高风险。' },
+  { question: '复利是指？', options: ['利息也生息', '只还本金', '单利计算'], answer: 0, explain: '复利就是"利滚利"，利息也会产生利息。时间越长，复利威力越大。' },
+  { question: '通货膨胀会让现金？', options: ['购买力上升', '购买力下降', '不变'], answer: 1, explain: '物价上涨，同样金额能买到的东西变少，现金购买力下降。' },
+  { question: '"年化收益率"是指？', options: ['折算成一年的收益率', '一天的真实收益', '银行给的利息'], answer: 0, explain: '年化收益率是把当前收益率（日/周/月）折算成一年的收益率，便于横向比较。' },
+  { question: '风险承受能力通常和什么有关？', options: ['只看年龄', '年龄/收入/资产/家庭综合', '只看收入'], answer: 1, explain: '风险承受能力需结合年龄、收入、资产、家庭负担等多方面综合评估。' },
+  { question: '"理财"的核心目的是？', options: ['一夜暴富', '资产保值增值', '躲避税收'], answer: 1, explain: '理财的目标是让资产在可控风险下实现保值增值，而非一夜暴富。' },
+  { question: '流动性最好的资产通常是？', options: ['现金/活期存款', '房产', '定期存款'], answer: 0, explain: '现金和活期存款可随时取用，流动性最好；房产变现慢、手续费高。' },
+  { question: '"家庭紧急备用金"通常建议储备？', options: ['1 个月支出', '3-6 个月支出', '3 年支出'], answer: 1, explain: '一般建议 3-6 个月的家庭开支作为备用金，应对失业、疾病等突发情况。' },
+  { question: '记账的主要作用是？', options: ['提高收入', '了解收支结构、减少浪费', '提升信用分'], answer: 1, explain: '记账帮助你看清钱花在哪里，是理财的第一步。' },
+
+  // ===== 银行存款与利率（8 道）=====
+  { question: '存款保险最高赔多少？', options: ['100万元', '20万元', '50万元'], answer: 2, explain: '中国存款保险条例规定，最高偿付限额为人民币 50 万元。' },
+  { question: '活期存款与定期存款相比，利率通常？', options: ['活期更高', '定期更高', '一样'], answer: 1, explain: '定期存款期限越长、利率通常越高；活期流动性好但利率最低。' },
+  { question: '大额存单相比普通定期存款，利率通常？', options: ['更低', '相同', '更高'], answer: 2, explain: '大额存单起存金额高（通常 20 万起），利率比普通定期更高。' },
+  { question: '结构性存款的本金通常？', options: ['不保本', '保本，但收益浮动', '保证高收益'], answer: 1, explain: '结构性存款通常保本，但收益与挂钩标的表现挂钩，可能很低甚至为零。' },
+  { question: '银行理财"打破刚兑"是指？', options: ['不再保本保收益', '不能买', '利率更高'], answer: 0, explain: '资管新规后，理财产品不再承诺保本保收益，风险由投资者自担。' },
+  { question: '存款准备金率上调通常会？', options: ['放松货币', '收紧货币', '没有影响'], answer: 1, explain: '准备金率上调意味着银行可放贷资金减少，属于货币收紧信号。' },
+  { question: 'LPR 是指？', options: ['存款基准利率', '贷款市场报价利率', '外币汇率'], answer: 1, explain: 'LPR（Loan Prime Rate）是贷款市场报价利率，由 18 家报价行报价形成。' },
+  { question: '定期存款提前支取，通常？', options: ['按活期计息', '按定期计息', '不给利息'], answer: 0, explain: '提前支取的定期存款，通常按支取日活期利率计息，收益大打折扣。' },
+
+  // ===== 股票基础（12 道）=====
+  { question: 'A股上午交易时间？', options: ['9:00-11:00', '9:30-11:30', '10:00-12:00'], answer: 1, explain: 'A股上午连续竞价时间为 9:30-11:30。' },
+  { question: 'A股下午交易时间？', options: ['13:00-15:00', '12:00-14:00', '14:00-16:00'], answer: 0, explain: 'A股下午连续竞价时间为 13:00-15:00。' },
+  { question: 'A股股票买入后多久可卖？', options: ['当天', '次日', '一周'], answer: 1, explain: 'A股实行 T+1 交收制度，当天买入的股票次一交易日才能卖出。' },
+  { question: '主板股票涨跌停幅度？', options: ['5%', '10%', '20%'], answer: 1, explain: 'A股主板股票涨跌停幅度通常为 10%。' },
+  { question: '创业板涨跌停幅度？', options: ['10%', '20%', '30%'], answer: 1, explain: '创业板股票涨跌停幅度为 20%。' },
+  { question: '科创板涨跌停幅度？', options: ['10%', '20%', '30%'], answer: 1, explain: '科创板股票涨跌停幅度为 20%。' },
+  { question: 'ST 股票涨跌停幅度？', options: ['5%', '10%', '20%'], answer: 0, explain: 'ST / *ST 股票（被风险警示）涨跌停幅度通常为 5%。' },
+  { question: '股票交易的印花税由谁收？', options: ['证券公司', '国家', '交易所'], answer: 1, explain: '印花税由国家征收，券商代扣代缴；目前 A 股卖出时按 0.05% 单边收取。' },
+  { question: '股票的"市盈率"是指？', options: ['股价 / 每股收益', '股价 / 每股净资产', '每股分红 / 股价'], answer: 0, explain: '市盈率（PE）＝股价 ÷ 每股收益，反映投资者愿意为每元盈利付出多少价格。' },
+  { question: '股票的"市净率"是指？', options: ['股价 / 每股收益', '股价 / 每股净资产', '每股分红 / 股价'], answer: 1, explain: '市净率（PB）＝股价 ÷ 每股净资产，常用于银行、地产等重资产行业估值。' },
+  { question: '"股息率"是指？', options: ['每股分红 / 股价', '股价 / 每股收益', '股价 / 每股净资产'], answer: 0, explain: '股息率＝每股分红 ÷ 股价，衡量现金分红的回报水平。' },
+  { question: '股票"除权除息"后，股价通常会？', options: ['不变', '下调', '上调'], answer: 1, explain: '分红或送股后，股价会相应下调，股东总资产不变。' },
+
+  // ===== 基金（8 道）=====
+  { question: '基金"申购"是指？', options: ['买入基金', '卖出基金', '转换基金'], answer: 0, explain: '申购是买入，赎回是卖出。' },
+  { question: '基金"赎回"是指？', options: ['买入基金', '卖出基金', '分红'], answer: 1, explain: '赎回是把持有的基金份额卖出换回现金。' },
+  { question: '货币基金主要投资于？', options: ['股票', '短期货币工具', '房地产'], answer: 1, explain: '货币基金主要投资短期国债、央行票据、同业存单等，风险低、流动性好。' },
+  { question: '股票型基金的股票仓位通常？', options: ['≤20%', '≥80%', '任意'], answer: 1, explain: '按监管分类，股票型基金的股票仓位不得低于 80%。' },
+  { question: '债券型基金主要投资？', options: ['股票', '债券', '房产'], answer: 1, explain: '债券型基金 80% 以上资产投资于债券，风险和收益通常低于股票型。' },
+  { question: '混合型基金通常投资？', options: ['仅股票', '仅债券', '股票 + 债券'], answer: 2, explain: '混合型基金同时投资股票和债券，比例灵活，风险介于股票型和债券型之间。' },
+  { question: '指数基金跟踪的是？', options: ['某位基金经理', '某个指数', '某只个股'], answer: 1, explain: '指数基金以跟踪某个指数（如沪深 300）为目标，追求与指数相近的收益。' },
+  { question: '基金"管理费"通常按什么方式收取？', options: ['一次性收取', '按年费率、按日计提', '免费'], answer: 1, explain: '基金管理费按年费率计算，从基金净值中按日计提，投资者感受不到单独扣除。' },
+
+  // ===== 债券（5 道）=====
+  { question: '债券的"票面利率"是指？', options: ['市场利率', '约定的年利率', '通胀率'], answer: 1, explain: '票面利率是债券发行时约定的年利率，用于计算每期利息。' },
+  { question: '国债通常被认为风险？', options: ['高', '中', '低'], answer: 2, explain: '国债以国家信用背书，通常被视为风险最低的债券之一。' },
+  { question: '债券价格与市场利率通常？', options: ['同向变动', '反向变动', '无关'], answer: 1, explain: '市场利率上升时，已发行债券的相对吸引力下降，价格下跌；反之亦然。' },
+  { question: '可转债可以转换成？', options: ['基金', '股票', '黄金'], answer: 1, explain: '可转换债券（可转债）可以在约定条件下转换成发行公司的股票。' },
+  { question: '债券的"到期收益率"是指？', options: ['票面利率', '持有到期的年化收益率', '银行利率'], answer: 1, explain: '到期收益率（YTM）是考虑买入价、票息、到期兑付后的综合年化收益率。' },
+
+  // ===== 保险（6 道）=====
+  { question: '保险的"犹豫期"通常是？', options: ['3 天', '10-15 天', '90 天'], answer: 1, explain: '犹豫期内可全额退保，一般长期人身险为 10-15 天。' },
+  { question: '"重疾险"主要保障？', options: ['意外伤害', '重大疾病', '住院费用'], answer: 1, explain: '重疾险在确诊合同约定的重大疾病时一次性赔付保额。' },
+  { question: '"意外险"通常保障？', options: ['重大疾病', '意外伤害', '住院费用'], answer: 1, explain: '意外险保障因外来的、突发的、非本意的事故造成的伤害。' },
+  { question: '"医疗险"通常报销？', options: ['意外身故', '住院/门诊医疗费', '重大疾病'], answer: 1, explain: '医疗险按实际发生的医疗费用报销，属于费用补偿型保险。' },
+  { question: '"寿险"主要保障？', options: ['意外受伤', '身故 / 全残', '疾病住院'], answer: 1, explain: '寿险以被保险人的生命为标的，身故或全残时赔付。' },
+  { question: '保险的"现金价值"是指？', options: ['保额', '退保时能拿回的钱', '年缴保费'], answer: 1, explain: '现金价值是保单退保时可领取的金额，早期通常低于已缴保费。' },
+
+  // ===== 房产与税务（5 道）=====
+  { question: '买房"首付"是指？', options: ['首次缴税', '首期付款', '月供'], answer: 1, explain: '首付是购房时的首期付款，剩余部分通过贷款支付。' },
+  { question: '个人所得税综合所得起征点？', options: ['3500 元/月', '5000 元/月', '8000 元/月'], answer: 1, explain: '2018 年税改后，综合所得基本减除费用标准为 5000 元/月。' },
+  { question: '"增值税"是一种？', options: ['所得税', '流转税', '财产税'], answer: 1, explain: '增值税对商品和服务在流转过程中的增值额征税，属于流转税。' },
+  { question: '房地产交易中的"契税"通常由谁缴？', options: ['买方', '卖方', '中介'], answer: 0, explain: '契税由买方缴纳，按成交价的一定比例征收，税率各地略有不同。' },
+  { question: '"限购"政策主要针对？', options: ['开发商', '购房资格', '房价'], answer: 1, explain: '限购政策通过户籍、社保年限等条件限制部分人群购房资格。' },
+
+  // ===== 反诈与风险防范（6 道）=====
+  { question: '反诈：收到陌生短信链接，应该？', options: ['点开看看', '不点击、直接删除', '转发给朋友'], answer: 1, explain: '不明链接可能植入木马或诱导登录钓鱼网站，应直接删除。' },
+  { question: '反诈：自称"公检法"要求转账到"安全账户"？', options: ['配合转账', '是典型诈骗，立即挂断', '先转一部分'], answer: 1, explain: '公检法不会通过电话要求转账，此类"安全账户"一律是诈骗。' },
+  { question: '反诈：承诺"高收益零风险"的理财？', options: ['靠谱，可投', '是骗局，远离', '试试看'], answer: 1, explain: '投资不可能同时做到高收益、零风险、高流动性，此类宣传基本是骗局。' },
+  { question: '反诈：网上兼职"刷单返利"？', options: ['可以试试', '是诈骗', '视情况而定'], answer: 1, explain: '刷单本身违法，所谓"返利"多为诱饵，最终会诱导加大投入后失联。' },
+  { question: '反诈："杀猪盘"是指？', options: ['赌场骗局', '婚恋诱导投资诈骗', '彩票诈骗'], answer: 1, explain: '杀猪盘通过婚恋交友建立信任，再诱导受害人在虚假平台投资，最终收割。' },
+  { question: '反诈：P2P 网贷平台的风险通常？', options: ['很低', '较高，已全面清退', '与银行一样'], answer: 1, explain: 'P2P 平台风险极高，国内已于 2020 年前后全面清退。' },
+  // ... 请把剩下的 190 道题按上面格式全部补全 ...
+
+  // ===== 扩展题库：新增 140 道 =====
+  // ---- 基础理财概念 +10 ----
+  { question: '什么是"机会成本"？', options: ['放弃的最佳替代方案的价值', '已经花掉的钱', '未来的收益'], answer: 0, explain: '机会成本是指为选择某个方案而放弃的其他最佳方案的价值。' },
+  { question: '"资产配置"是指？', options: ['只买一种资产', '把钱分配到不同资产类别', '把钱都存银行'], answer: 1, explain: '资产配置是把资金分配到股票、债券、现金、房产等不同类别，以平衡风险和收益。' },
+  { question: '"被动收入"是指？', options: ['不需要主动劳动就能获得的收入', '加班费', '年终奖'], answer: 0, explain: '被动收入如房租、股息、利息，不需要持续投入劳动即可获得。' },
+  { question: '"财务自由"通常指？', options: ['有很多钱', '被动收入覆盖生活支出', '不用上班'], answer: 1, explain: '财务自由的核心是无需为生活开销而努力工作的状态，即被动收入 ≥ 生活支出。' },
+  { question: '"杠杆"是指？', options: ['借来的钱', '本金', '收益'], answer: 0, explain: '杠杆指用借入的资金放大投资规模，会同时放大收益和亏损。' },
+  { question: '"净值"是指？', options: ['总资产', '总资产减去总负债', '现金余额'], answer: 1, explain: '净值（净资产）＝总资产 − 总负债。' },
+  { question: '"负债率"是？', options: ['总负债/总资产', '总资产/总负债', '收入/负债'], answer: 0, explain: '负债率＝总负债 ÷ 总资产，反映家庭或企业的杠杆水平。' },
+  { question: '"货币时间价值"是指？', options: ['现在的钱比未来的钱更值钱', '时间就是金钱', '未来收益更高'], answer: 0, explain: '货币有时间价值，今天的 100 元可以投资生息，所以比未来的 100 元更值钱。' },
+  { question: '"定投"是指？', options: ['一次性买入', '按固定周期投资固定金额', '随时买卖'], answer: 1, explain: '定投是按固定周期（如每月）投入固定金额，能平滑成本、分散择时风险。' },
+  { question: '"止盈止损"是指？', options: ['设定卖出条件', '追涨杀跌', '只买不卖'], answer: 0, explain: '止盈止损是事先设定目标价位或止损价位，达到条件就执行，控制情绪化操作。' },
+
+  // ---- 银行存款与利率 +5 ----
+  { question: '定期存款的期限通常不包括？', options: ['3 个月', '5 年', '30 年'], answer: 2, explain: '银行定期存款最长一般为 5 年，没有 30 年的定期存款。' },
+  { question: '"零存整取"是指？', options: ['每月存固定金额，到期一次性取出', '一次性存入', '随时存取'], answer: 0, explain: '零存整取是每月固定存入，到期一次性支取本息。' },
+  { question: '"整存零取"是指？', options: ['一次性存入，分期支取', '一次性存取', '每月存入'], answer: 0, explain: '整存零取是一次存入较大金额，之后按约定分期支取。' },
+  { question: '"通知存款"取款需要？', options: ['提前通知银行', '随时取', '需预约 1 个月'], answer: 0, explain: '通知存款取款时需提前通知银行（通常 1 天或 7 天）。' },
+  { question: '银行存款利率与央行基准利率的关系？', options: ['银行可自主浮动', '完全由央行定', '与央行无关'], answer: 0, explain: '利率市场化后，银行可在央行基准利率基础上自主浮动。' },
+
+  // ---- 股票进阶 +25 ----
+  { question: 'K 线图由哪四价构成？', options: ['开盘、收盘、最高、最低', '开盘、收盘、成交量、成交额', '只有收盘价'], answer: 0, explain: 'K 线由开盘价、收盘价、最高价、最低价四个价格构成。' },
+  { question: 'K 线中"阳线"通常表示？', options: ['收盘价高于开盘价', '收盘价低于开盘价', '涨跌不定'], answer: 0, explain: '阳线（红/白色）表示收盘价高于开盘价，为上涨。' },
+  { question: 'K 线中"阴线"通常表示？', options: ['收盘价低于开盘价', '收盘价高于开盘价', '平盘'], answer: 0, explain: '阴线（绿/黑色）表示收盘价低于开盘价，为下跌。' },
+  { question: '"均线"（MA）是？', options: ['某段时间的平均收盘价', '最高价', '最低价'], answer: 0, explain: '均线是某段时间内股价的平均值连成的线，常用 5 日、10 日、20 日等。' },
+  { question: '"涨停板"是指？', options: ['股价涨幅达到当日上限', '成交量最大', '上涨开始'], answer: 0, explain: '涨停板是股价当日涨幅达到规定上限（如主板 10%）。' },
+  { question: '"跌停板"是指？', options: ['跌幅达到当日下限', '下跌开始', '成交量最小'], answer: 0, explain: '跌停板是股价当日跌幅达到规定下限。' },
+  { question: '"换手率"是指？', options: ['成交量/流通股本', '股价/每股收益', '涨跌幅度'], answer: 0, explain: '换手率＝成交量 ÷ 流通股本，反映股票的交易活跃程度。' },
+  { question: '"成交量"是指？', options: ['成交的股数', '成交的金额', '涨跌幅度'], answer: 0, explain: '成交量是成交的股票数量（股或手），反映交易活跃度。' },
+  { question: '"成交额"是指？', options: ['成交的金额', '成交的股数', '换手率'], answer: 0, explain: '成交额是成交的总金额，＝成交量 × 成交均价。' },
+  { question: '一手 A 股通常是多少股？', options: ['10 股', '100 股', '1000 股'], answer: 1, explain: 'A 股一手等于 100 股（科创板可以 1 股为单位）。' },
+  { question: '"龙虎榜"是指？', options: ['交易所公布的异动股票买卖席位', '每日涨跌榜', '公司高管榜'], answer: 0, explain: '龙虎榜是交易所公布的出现异常波动或特定条件的股票的买卖前五席位。' },
+  { question: '"融资融券"是指？', options: ['借钱买股', '借股卖出', '借钱买股和借股卖出'], answer: 2, explain: '融资是借钱买股票，融券是借股票卖出，都是杠杆交易方式。' },
+  { question: '"北向资金"是指？', options: ['通过沪股通、深股通流入 A 股的境外资金', '南下资金', '外资直投'], answer: 0, explain: '北向资金是从香港通过沪股通、深股通买 A 股的境外资金。' },
+  { question: '"港股通"是指？', options: ['内地投资者买卖港股', '香港投资者买 A 股', '双向通道'], answer: 0, explain: '港股通是内地投资者通过上交所、深交所买卖港股的机制。' },
+  { question: '"沪股通、深股通"是？', options: ['香港投资者买卖上海/深圳 A 股', '内地投资者买卖港股', '双向'], answer: 0, explain: '沪股通、深股通是境外投资者买卖上交所、深交所 A 股的通道。' },
+  { question: '"分红派息"是指？', options: ['公司把利润分给股东', '公司回购股票', '公司增发'], answer: 0, explain: '分红派息是上市公司将部分利润以现金或股票形式分给股东。' },
+  { question: '"送股"是指？', options: ['以股票形式分配利润', '现金分红', '增发新股'], answer: 0, explain: '送股是用股票代替现金分红，公司股本扩大、股价相应降低。' },
+  { question: '"转增股本"和"送股"的区别是？', options: ['来源不同：送股来自利润，转增来自资本公积', '没有区别', '转增要扣税'], answer: 0, explain: '送股来自未分配利润，转增来自资本公积，转增通常不视为分红、不缴个税。' },
+  { question: '"配股"是指？', options: ['公司向老股东按比例增发新股', '公司回购', '送股'], answer: 0, explain: '配股是上市公司向现有股东按持股比例、以低于市价的价格发行新股。' },
+  { question: '"增发"是指？', options: ['公司发行新股', '回购股票', '分红'], answer: 0, explain: '增发是上市公司再次发行股票融资，分定向增发和公开增发。' },
+  { question: '"回购"是指？', options: ['公司从市场买回自己股票', '卖出股票', '分红'], answer: 0, explain: '股票回购是公司用自有资金从市场买回自己股票，通常减少流通股、提升每股收益。' },
+  { question: '"限售股"是指？', options: ['暂时不能上市流通的股票', '涨停的股票', '跌停的股票'], answer: 0, explain: '限售股（如大股东、原始股东）在锁定期内不能卖出。' },
+  { question: '"解禁"是指？', options: ['限售股到期可以上市流通', '涨停', '停牌'], answer: 0, explain: '解禁是限售股的锁定期结束，可以自由交易。' },
+  { question: '"停牌"是指？', options: ['股票暂停交易', '涨停', '跌停'], answer: 0, explain: '停牌是股票暂停交易，通常因重大事项、核查异常波动等。' },
+  { question: '"退市"是指？', options: ['股票被终止上市', '停牌', '摘帽'], answer: 0, explain: '退市是股票不再在交易所挂牌交易，通常因连续亏损或重大违规。' },
+
+  // ---- 基金进阶 +15 ----
+  { question: '"ETF"是指？', options: ['交易型开放式指数基金', '封闭式基金', '货币基金'], answer: 0, explain: 'ETF（Exchange Traded Fund）是可在交易所买卖的指数基金。' },
+  { question: '"LOF"是指？', options: ['上市型开放式基金', '封闭式基金', '货币基金'], answer: 0, explain: 'LOF（Listed Open-Ended Fund）可同时在场内和场外交易。' },
+  { question: '"QDII"基金是指？', options: ['投资境外市场的基金', '量化基金', '债券基金'], answer: 0, explain: 'QDII（合格境内机构投资者）基金是投资海外市场的基金。' },
+  { question: '"FOF"是指？', options: ['基金中的基金', '债券基金', '量化基金'], answer: 0, explain: 'FOF（Fund of Funds）是投资其他基金的基金。' },
+  { question: '"夏普比率"衡量的是？', options: ['单位风险的超额收益', '总收益', '波动率'], answer: 0, explain: '夏普比率＝（组合收益 − 无风险收益）÷ 组合波动率，越高越优。' },
+  { question: '"最大回撤"衡量的是？', options: ['从高点到低点的最大跌幅', '总亏损', '波动率'], answer: 0, explain: '最大回撤是基金历史净值从最高点回落到最低点的最大幅度。' },
+  { question: '"定投"最适合什么市场？', options: ['波动大的市场', '单边上涨', '单边下跌'], answer: 0, explain: '定投在波动大的市场中更能体现摊平成本的优势。' },
+  { question: '基金"净值"是指？', options: ['每份基金的价值', '基金总规模', '管理费'], answer: 0, explain: '基金净值是每份基金的价值，＝基金总资产 ÷ 总份额。' },
+  { question: '基金"累计净值"考虑了？', options: ['分红再投资', '只是净值', '只有价格'], answer: 0, explain: '累计净值把历史分红加回净值，反映基金真实业绩。' },
+  { question: '"场内基金"是指？', options: ['在交易所买卖的基金', '只能场外申购', '只能银行买'], answer: 0, explain: '场内基金（如 ETF、LOF）可在交易所像股票一样买卖。' },
+  { question: '"场外基金"是指？', options: ['在银行/券商/第三方平台申购的基金', '交易所买卖', '只能柜台'], answer: 0, explain: '场外基金通过银行、券商、第三方平台申购赎回，不是交易所买卖。' },
+  { question: '基金"申购费"通常？', options: ['买入时收取', '卖出时收取', '按日扣'], answer: 0, explain: '申购费是买入基金时收取的费用，赎回费是卖出时收取。' },
+  { question: '基金"赎回费"通常？', options: ['持有时间越短越高', '固定不变', '免费'], answer: 0, explain: '赎回费通常与持有时间挂钩，持有越短费率越高，鼓励长期持有。' },
+  { question: '"货币基金"的收益通常？', options: ['高于活期、低于股票型', '高于股票型', '高于所有基金'], answer: 0, explain: '货币基金风险低、流动性好，收益高于活期但低于股票型基金。' },
+  { question: '余额宝本质上是？', options: ['货币基金', '股票', '债券'], answer: 0, explain: '余额宝对接的是货币市场基金。' },
+
+  // ---- 债券 +5 ----
+  { question: '债券的"发行人"是指？', options: ['借钱的一方', '买债券的人', '监管机构'], answer: 0, explain: '债券发行人是筹资方（如政府、企业），投资者是出借方。' },
+  { question: '债券的"信用评级"越低，风险通常？', options: ['越高', '越低', '不变'], answer: 0, explain: '评级越低，违约风险越高，需要更高的利率补偿。' },
+  { question: '"国债逆回购"本质上是？', options: ['短期借出资金获得利息', '买国债', '卖国债'], answer: 0, explain: '国债逆回购是投资者把钱短期借出，对方以国债作抵押，到期还本付息。' },
+  { question: '债券的"到期日"是指？', options: ['发行人偿还本金的日期', '付息日', '发行日'], answer: 0, explain: '到期日是债券发行人按面值偿还本金的日期。' },
+  { question: '"零息债券"是指？', options: ['不付利息、折价发行', '不付本金', '无到期日'], answer: 0, explain: '零息债券不支付利息，以低于面值的价格发行，到期按面值兑付。' },
+
+  // ---- 保险进阶 +10 ----
+  { question: '"定期寿险"是指？', options: ['保障一定期限的身故', '终身保障', '只保意外'], answer: 0, explain: '定期寿险在约定期间内身故赔付，保费较低、杠杆高。' },
+  { question: '"终身寿险"是指？', options: ['保障终身的身故', '只保 10 年', '只保疾病'], answer: 0, explain: '终身寿险保障终身，必然赔付，兼具保障和储蓄功能。' },
+  { question: '"年金险"主要是？', options: ['按约定分期领取的保险', '只保身故', '只保意外'], answer: 0, explain: '年金险在约定时间开始按期给付保险金，常用于养老和教育金规划。' },
+  { question: '"百万医疗险"通常？', options: ['保额高、保费低、有免赔额', '保额低', '没有免赔'], answer: 0, explain: '百万医疗险保额常达百万，保费便宜，一般有 1 万元免赔额。' },
+  { question: '"意外险"通常是否包含疾病？', options: ['不包含', '包含', '部分包含'], answer: 0, explain: '意外险只保意外事故，不保疾病。' },
+  { question: '"重疾险"的赔付方式通常是？', options: ['确诊即赔', '报销制', '事后补贴'], answer: 0, explain: '重疾险通常是确诊合同约定的重疾后一次性赔付保额。' },
+  { question: '"免赔额"是指？', options: ['自己先承担的部分', '保险公司全赔', '保额上限'], answer: 0, explain: '免赔额是保险公司不赔、需自己承担的部分，超过部分才由保险赔付。' },
+  { question: '"等待期"是指？', options: ['投保后一段时间内出险不赔', '犹豫期', '缴费期'], answer: 0, explain: '等待期是保险合同生效后一段时间内出险不赔，防止带病投保。' },
+  { question: '"如实告知"是指？', options: ['投保时如实说明健康状况', '随便填', '隐瞒病情'], answer: 0, explain: '投保时应如实告知健康状况，否则可能影响理赔甚至合同无效。' },
+  { question: '"保险利益"是指？', options: ['投保人对被保险人具有法律上承认的利益', '收益', '分红'], answer: 0, explain: '保险利益是投保人对被保险人具有的法律上承认的利益，是投保的前提。' },
+
+  // ---- 房产与税务进阶 +10 ----
+  { question: '"公积金"是指？', options: ['住房公积金', '社保', '商业保险'], answer: 0, explain: '住房公积金是职工和单位共同缴存的长期住房储金，可用于购房、租房等。' },
+  { question: '"等额本息"与"等额本金"相比？', options: ['每月还款额固定', '前期多后期少', '每月递减'], answer: 0, explain: '等额本息每月还款额固定；等额本金每月还款额递减、前期压力大。' },
+  { question: '"LPR 加点"是指？', options: ['在 LPR 基础上的浮动', '固定利率', '折扣'], answer: 0, explain: '房贷利率通常以 LPR 为基准加减点形成。' },
+  { question: '"二手房满五唯一"通常免征？', options: ['个人所得税', '契税', '增值税'], answer: 0, explain: '"满五唯一"（满 5 年且是家庭唯一住房）通常免征个人所得税。' },
+  { question: '契税的纳税人是？', options: ['买方', '卖方', '中介'], answer: 0, explain: '契税由买方缴纳。' },
+  { question: '个税专项附加扣除不包括？', options: ['子女教育', '住房贷款利息', '旅游支出'], answer: 2, explain: '专项附加扣除包括子女教育、继续教育、住房贷款利息、住房租金、赡养老人、大病医疗等，不含旅游。' },
+  { question: '个人所得税的"综合所得"包括？', options: ['工资薪金、劳务报酬、稿酬、特许权使用费', '只有工资', '只有劳务'], answer: 0, explain: '综合所得包括工资薪金、劳务报酬、稿酬、特许权使用费四项。' },
+  { question: '年终奖单独计税政策？', options: ['可选择单独计税或并入综合所得', '必须并入', '必须单独'], answer: 0, explain: '年终奖可选择单独计税或并入综合所得，纳税人可择低适用。' },
+  { question: '"增值税专用发票"可以用来？', options: ['抵扣进项税', '报销', '抵个税'], answer: 0, explain: '增值税专用发票可用于一般纳税人抵扣进项税额。' },
+  { question: '房产税目前在上海、重庆？', options: ['试点征收', '全国征收', '尚未试点'], answer: 0, explain: '房产税目前在上海、重庆等地试点，尚未全国推开。' },
+
+  // ---- 反诈与风险防范 +10 ----
+  { question: '反诈："冒充客服退款"骗局的典型套路？', options: ['引导点击钓鱼链接', '直接退款', '上门服务'], answer: 0, explain: '冒充客服以退款为由，诱导点击钓鱼链接或提供验证码。' },
+  { question: '反诈："刷单返利"的最终目的？', options: ['诱使受害者加大投入后失联', '帮商家刷单', '提高评分'], answer: 0, explain: '刷单返利通过小额返现建立信任，最终诱使大额投入后卷款跑路。' },
+  { question: '反诈：收到"ETC 已失效"短信？', options: ['不点击链接、通过官方渠道核实', '立即点击', '直接回复'], answer: 0, explain: '此类短信多为钓鱼，应通过官方 App 或客服核实。' },
+  { question: '反诈："AI 换脸"诈骗常见于？', options: ['视频通话冒充亲友借钱', '网购', '招聘'], answer: 0, explain: '骗子利用 AI 换脸冒充亲友视频借钱，需通过其他渠道确认。' },
+  { question: '反诈："注销校园贷"骗局针对？', options: ['应届毕业生', '老年人', '儿童'], answer: 0, explain: '骗子冒充网贷平台客服，以"注销校园贷否则影响征信"为由行骗。' },
+  { question: '反诈："征信修复"通常？', options: ['是骗局，征信记录不可人为修改', '有效', '收费可删'], answer: 0, explain: '征信记录由央行征信系统管理，任何"花钱修复"都是骗局。' },
+  { question: '反诈："虚拟货币"投资需注意？', options: ['国内虚拟货币交易不受法律保护', '稳赚不赔', '官方支持'], answer: 0, explain: '国内虚拟货币相关业务活动属于非法金融活动，交易不受法律保护。' },
+  { question: '反诈："杀猪盘"的典型特征？', options: ['先建立感情再诱导投资', '直接要钱', '只卖商品'], answer: 0, explain: '杀猪盘通过长期感情铺垫，再诱导被害人在虚假平台投资。' },
+  { question: '反诈："冒充公检法"电话通常要求？', options: ['转账到"安全账户"', '到派出所配合', '提供身份信息'], answer: 0, explain: '公检法不会电话办案、不会要求转账到所谓"安全账户"。' },
+  { question: '反诈：陌生人索要"收款码"时？', options: ['可能被用于洗钱', '无风险', '可随便给'], answer: 0, explain: '出租、出借收款码可能被用于洗钱，需谨慎。' },
+
+  // ---- 宏观经济 +15 ----
+  { question: 'GDP 是指？', options: ['国内生产总值', '国民生产总值', '人均收入'], answer: 0, explain: 'GDP（Gross Domestic Product）是国内生产总值，衡量一国境内生产活动总规模。' },
+  { question: 'CPI 是指？', options: ['居民消费价格指数', '工业品出厂价', '采购经理指数'], answer: 0, explain: 'CPI（Consumer Price Index）是居民消费价格指数，反映通胀水平。' },
+  { question: 'PPI 是指？', options: ['工业生产者出厂价格指数', '消费价格指数', 'GDP'], answer: 0, explain: 'PPI（Producer Price Index）反映工业品出厂价格的变动。' },
+  { question: 'PMI 是指？', options: ['采购经理指数', '消费价格', '生产价格'], answer: 0, explain: 'PMI（Purchasing Managers\u0027 Index）反映制造业和服务业的景气度，50 为荣枯线。' },
+  { question: 'M2 是指？', options: ['广义货币供应量', '狭义货币', '基础货币'], answer: 0, explain: 'M2 是广义货币供应量，包括 M1 及定期存款、储蓄存款等。' },
+  { question: '"加息"通常会导致？', options: ['股市承压、债券价格下跌', '股市上涨', '债券上涨'], answer: 0, explain: '加息提高资金成本，通常利空股市和债市。' },
+  { question: '"降准"是指？', options: ['下调存款准备金率', '降息', '减少货币'], answer: 0, explain: '降准是下调存款准备金率，释放银行可贷资金，属于宽松信号。' },
+  { question: '"逆回购"是央行？', options: ['向市场投放资金', '回笼资金', '买卖股票'], answer: 0, explain: '央行逆回购是向市场短期投放流动性。' },
+  { question: '"正回购"是央行？', options: ['从市场回笼资金', '投放资金', '买国债'], answer: 0, explain: '央行正回购是从市场回笼资金。' },
+  { question: '"通缩"是指？', options: ['物价普遍持续下跌', '物价上涨', '经济繁荣'], answer: 0, explain: '通缩是物价总水平持续下降，通常伴随经济衰退。' },
+  { question: '"滞胀"是指？', options: ['经济停滞 + 通胀', '经济衰退 + 通缩', '高速增长'], answer: 0, explain: '滞胀是经济停滞与通货膨胀并存的状态。' },
+  { question: '"财政政策"主要由谁执行？', options: ['政府', '央行', '商业银行'], answer: 0, explain: '财政政策由政府通过税收、支出等手段实施。' },
+  { question: '"货币政策"主要由谁执行？', options: ['央行', '政府', '商业银行'], answer: 0, explain: '货币政策由中央银行通过利率、存款准备金率等工具实施。' },
+  { question: '"贸易顺差"是指？', options: ['出口大于进口', '进口大于出口', '进出口相等'], answer: 0, explain: '贸易顺差是出口总额大于进口总额。' },
+  { question: '"人民币升值"通常会导致？', options: ['出口承压、进口受益', '出口受益', '无关'], answer: 0, explain: '人民币升值使出口商品以外币计价更贵，出口承压；进口成本下降。' },
+
+  // ---- 投资理念与心理 +15 ----
+  { question: '"价值投资"的核心是？', options: ['买入被低估的资产并长期持有', '追涨杀跌', '短线交易'], answer: 0, explain: '价值投资关注资产内在价值，低估时买入、长期持有。' },
+  { question: '"追涨杀跌"通常？', options: ['容易亏损', '稳赚', '无风险'], answer: 0, explain: '追涨杀跌是典型的情绪化操作，往往高买低卖。' },
+  { question: '"羊群效应"是指？', options: ['盲目跟风', '独立思考', '冷静分析'], answer: 0, explain: '羊群效应是投资者盲目跟随大众决策，容易在市场顶部买入。' },
+  { question: '"锚定效应"是指？', options: ['过度依赖最初获得的信息', '理性判断', '分散投资'], answer: 0, explain: '锚定效应是投资者过度依赖第一印象或某个参考价做决策。' },
+  { question: '"损失厌恶"是指？', options: ['对亏损的痛苦大于同等收益的快乐', '喜欢亏损', '无差别'], answer: 0, explain: '损失厌恶是行为金融学概念，人们对损失的敏感度高于同等收益。' },
+  { question: '"长期主义"强调？', options: ['坚持长期投资、忽略短期波动', '短线交易', '频繁操作'], answer: 0, explain: '长期主义强调时间复利，减少短期择时和频繁交易。' },
+  { question: '"能力圈"是指？', options: ['自己真正理解的领域', '所有投资', '别人推荐的'], answer: 0, explain: '能力圈是自己真正了解和擅长的领域，投资应尽量在此范围内。' },
+  { question: '"安全边际"是指？', options: ['买入价低于内在价值的差额', '保本', '止损'], answer: 0, explain: '安全边际是买入价格低于估算内在价值的空间，为误判留缓冲。' },
+  { question: '"不要把所有鸡蛋放在一个篮子里"强调？', options: ['分散投资', '集中投资', '只买一只'], answer: 0, explain: '分散投资能降低单一资产波动对整体组合的影响。' },
+  { question: '"赌徒谬误"是指？', options: ['认为随机事件有记忆', '理性判断', '分散投资'], answer: 0, explain: '赌徒谬误是错误认为过去的结果会影响未来独立随机事件的概率。' },
+  { question: '"幸存者偏差"是指？', options: ['只看到成功案例而忽略失败者', '统计严谨', '理性分析'], answer: 0, explain: '幸存者偏差是只关注成功样本，忽略失败样本，导致误判。' },
+  { question: '"复利效应"的关键是？', options: ['时间 + 持续收益', '短期暴利', '一次性投入'], answer: 0, explain: '复利的效果依赖足够长的时间和稳定的正收益。' },
+  { question: '"72 法则"用于估算？', options: ['本金翻倍所需年数', '收益率', '通胀'], answer: 0, explain: '72 法则：本金翻倍所需年数 ≈ 72 ÷ 年化收益率（%）。' },
+  { question: '"投资不可能三角"是指？', options: ['高收益、低风险、高流动性不能同时满足', '只能选一个', '三者可兼得'], answer: 0, explain: '任何投资都无法同时做到高收益、低风险、高流动性。' },
+  { question: '"仓位管理"是指？', options: ['控制投入资金比例', '只买一只', '满仓'], answer: 0, explain: '仓位管理是合理分配投入资金比例，控制整体风险。' },
+
+  // ---- 生活理财（信用卡/征信/消费）+10 ----
+  { question: '信用卡"最低还款"通常？', options: ['需支付高额利息', '免费', '相当于全额还清'], answer: 0, explain: '最低还款只是避免逾期，未还部分会按日计息，成本较高。' },
+  { question: '信用卡"免息期"通常？', options: ['20-50 天左右', '永远免息', '只有 1 天'], answer: 0, explain: '信用卡免息期一般为 20-50 天，具体取决于账单日和还款日。' },
+  { question: '信用卡逾期会影响？', options: ['个人征信', '没有影响', '只影响信用卡'], answer: 0, explain: '信用卡逾期会记入央行征信，影响后续贷款、信用卡申请。' },
+  { question: '征信报告查询方式？', options: ['央行征信中心官网或 App', '只能线下', '只能银行'], answer: 0, explain: '可通过中国人民银行征信中心官网或手机 App 查询个人信用报告。' },
+  { question: '征信报告中的"硬查询"是指？', options: ['贷款审批、信用卡审批等查询', '本人查询', '贷后管理'], answer: 0, explain: '硬查询包括贷款审批、信用卡审批等，过多硬查询会影响征信评分。' },
+  { question: '"花呗""白条"等属于？', options: ['消费信贷产品', '储蓄', '保险'], answer: 0, explain: '花呗、白条本质是消费信贷产品，使用会上征信（部分）。' },
+  { question: '"年化利率"和"月利率"的关系？', options: ['年化 ≈ 月利率 × 12', '相等', '无关'], answer: 0, explain: '年化利率约等于月利率乘以 12，注意有些产品用月费率混淆。' },
+  { question: '"消费贷"资金通常？', options: ['不能用于买房炒股', '可以买房', '可以炒股'], answer: 0, explain: '监管禁止消费贷资金流入楼市、股市。' },
+  { question: '等额本息还款方式的实际年化利率？', options: ['通常高于名义利率（IRR）', '等于名义', '低于名义'], answer: 0, explain: '等额本息还款方式下，用 IRR 计算的真实年化利率高于名义利率。' },
+  { question: '"砍头息"是指？', options: ['放贷时预先扣除利息', '提前还款', '逾期罚息'], answer: 0, explain: '砍头息是放贷时先从本金中扣除利息，属于违规行为。' },
+
+  // ---- 其他金融知识 +10 ----
+  { question: '"外汇"是指？', options: ['外国货币及外币资产', '黄金', '股票'], answer: 0, explain: '外汇是外国货币、外币存款、外币有价证券等资产。' },
+  { question: '"汇率"是指？', options: ['一国货币兑换另一国货币的比率', '利率', '通胀率'], answer: 0, explain: '汇率是两种货币之间的兑换比率。' },
+  { question: '"黄金"通常被视为？', options: ['避险资产', '高风险资产', '货币'], answer: 0, explain: '黄金通常被视为避险资产，在动荡时期受青睐。' },
+  { question: '"期货"是指？', options: ['约定未来交割的标准化合约', '现货', '期权'], answer: 0, explain: '期货是约定在未来特定时间以特定价格买卖标的物的标准化合约。' },
+  { question: '"期权"是指？', options: ['未来买卖的权利（非义务）', '期货', '现货'], answer: 0, explain: '期权赋予买方在未来以约定价格买卖的权利，而非义务。' },
+  { question: '"信托"是指？', options: ['受托管理财产的金融产品', '保险', '基金'], answer: 0, explain: '信托是委托人将财产委托给受托人管理，常用于高净值客户。' },
+  { question: '"私募基金"通常？', options: ['面向合格投资者、门槛较高', '面向所有人', '免费'], answer: 0, explain: '私募基金面向合格投资者，起投通常 100 万元，不可公开宣传。' },
+  { question: '"公募基金"是指？', options: ['公开募集、面向大众的基金', '私募基金', '内部基金'], answer: 0, explain: '公募基金可以公开宣传、面向大众投资者募集。' },
+  { question: '"合格投资者"通常要求？', options: ['一定的资产或收入门槛', '无门槛', '年龄限制'], answer: 0, explain: '合格投资者需满足金融资产、年收入等门槛，可投资高风险产品。' },
+  { question: '"REITs"是指？', options: ['不动产投资信托基金', '货币基金', '债券'], answer: 0, explain: 'REITs（Real Estate Investment Trusts）是投资不动产的信托基金。' },
+
+  // ===== 新增 100 道 · 职业规划与收入（10）=====
+  { question: '"SWOT 分析"中的 S 是指？', options: ['优势', '劣势', '机会'], answer: 0, explain: 'SWOT 分别代表 Strengths（优势）、Weaknesses（劣势）、Opportunities（机会）、Threats（威胁）。' },
+  { question: '"人力资本"是指？', options: ['公司的固定资产', '个人所拥有的知识、技能和健康', '人力资源部门'], answer: 1, explain: '人力资本是体现在人身上的知识、技能、健康等，是个人最重要的资产。' },
+  { question: '提高收入最根本的途径通常是？', options: ['加班加点', '换工作', '提升自身不可替代性'], answer: 2, explain: '不可替代性越高，议价能力越强，收入提升越可持续。' },
+  { question: '选择副业时最应关注？', options: ['是否与主业冲突、能否长期积累', '短期收益高低', '别人做什么'], answer: 0, explain: '副业要能与主业协同或长期积累，避免单纯出卖时间。' },
+  { question: '"职业天花板"通常指？', options: ['公司楼层高度', '职业发展达到的上限', '工资的上限'], answer: 1, explain: '职业天花板是个人在当前路径上能达到的最高位置。' },
+  { question: '跳槽决策时最不该只看？', options: ['岗位发展空间', '公司文化', '薪资涨幅'], answer: 2, explain: '跳槽应综合考虑发展空间、公司文化、通勤等，只看薪资容易踩坑。' },
+  { question: '"斜杠青年"是指？', options: ['有多重职业身份的人', '喜欢画斜杠的人', '专职兼职的人'], answer: 0, explain: '斜杠青年指拥有多重职业和身份的人，如"设计师/摄影师/博主"。' },
+  { question: '"35 岁危机"反映的是？', options: ['生理衰老', '职业竞争力与年龄的错配', '年龄歧视'], answer: 1, explain: '核心是部分岗位对年龄的隐性偏好，以及个人竞争力未能随年龄同步提升。' },
+  { question: '职业转型时最稳妥的做法通常是？', options: ['裸辞 All in', '跟风转行', '先积累新领域技能再转'], answer: 2, explain: '先积累新领域技能和资源，再平滑过渡，风险最低。' },
+  { question: '"睡后收入"是指？', options: ['不需要持续投入劳动的收入', '睡觉时赚的钱', '加班费'], answer: 0, explain: '睡后收入即被动收入，如房租、股息、版权费等。' },
+
+  // ===== 新增 100 道 · 家庭理财与规划（10）=====
+  { question: '家庭资产负债表中，房产属于？', options: ['资产', '负债', '权益'], answer: 0, explain: '自住房产属于资产项，房贷属于负债项。' },
+  { question: '"家庭现金流"是指？', options: ['家庭存款余额', '家庭收入与支出的流动情况', '家庭贷款总额'], answer: 1, explain: '现金流关注的是钱进出的节奏，而非存量。' },
+  { question: '家庭理财规划的第一步通常是？', options: ['买股票', '买保险', '明确家庭财务目标'], answer: 2, explain: '先明确目标（教育、养老、购房），再倒推配置方案。' },
+  { question: '"4321 法则"中，40% 用于？', options: ['投资', '生活开支', '储蓄'], answer: 0, explain: '4321 法则：40% 投资、30% 生活、20% 储蓄、10% 保险。' },
+  { question: '夫妻共同理财时最重要的是？', options: ['各管各的', '透明沟通、目标一致', '谁赚得多谁说了算'], answer: 1, explain: '家庭理财是共同决策，透明和共识比谁赚得多更重要。' },
+  { question: '"教育金"规划应优先考虑？', options: ['高收益', '随时可取', '安全性和专款专用'], answer: 2, explain: '教育金是刚性支出，安全性和专款专用优先于收益。' },
+  { question: '养老金准备越早越好，主要因为？', options: ['复利效应', '越早越便宜', '政策要求'], answer: 0, explain: '时间是复利最好的朋友，越早开始，积累越轻松。' },
+  { question: '家庭负债中"良性负债"通常指？', options: ['信用卡消费', '能带来资产增值或收入提升的负债', '所有负债'], answer: 1, explain: '如房贷、教育贷款等，能带来长期资产或收入提升。' },
+  { question: '"家庭财务安全线"通常指？', options: ['存款 100 万', '有房有车', '应急储备 + 保险 + 稳定收入'], answer: 2, explain: '安全线是应急储备、保险保障和稳定收入的组合，而非单一数字。' },
+  { question: '家庭理财中"不要把鸡蛋放在一个篮子里"最适用于？', options: ['投资资产配置', '存款', '保险'], answer: 0, explain: '分散投资能降低单一资产波动对家庭财富的冲击。' },
+
+  // ===== 新增 100 道 · 消费陷阱与理性消费（10）=====
+  { question: '"消费主义陷阱"的典型表现是？', options: ['按需购买', '为身份认同和情绪买单', '货比三家'], answer: 1, explain: '消费主义常把商品与身份、情绪绑定，诱导非理性消费。' },
+  { question: '"沉没成本"在消费决策中应？', options: ['纳入考虑', '部分考虑', '不予考虑'], answer: 2, explain: '沉没成本是已发生且不可收回的支出，理性决策应忽略它。' },
+  { question: '"锚定价格"常见于？', options: ['打折促销', '超市标价', '以上都是'], answer: 0, explain: '商家先标一个高价，再打折，让你觉得"赚到了"。' },
+  { question: '"买一送一"往往利用的是？', options: ['理性计算', '贪便宜心理', '需求导向'], answer: 1, explain: '买一送一常让你买下本不需要的东西，实际支出更多。' },
+  { question: '"限时抢购"制造的是？', options: ['安全感', '满足感', '紧迫感与稀缺感'], answer: 2, explain: '限时、限量会压缩思考时间，诱导冲动消费。' },
+  { question: '"先用后付"可能带来的风险是？', options: ['过度消费和逾期', '无风险', '提升信用'], answer: 0, explain: '先用后付降低了支付痛感，容易导致过度消费和逾期。' },
+  { question: '"会员卡充值"的主要风险是？', options: ['使用不便', '商家跑路', '以上都是'], answer: 1, explain: '充值后商家跑路是常见风险，充值金额越大风险越高。' },
+  { question: '"直播带货"中最容易冲动消费的原因是？', options: ['价格便宜', '商品质量好', '主播营造的氛围和紧迫感'], answer: 2, explain: '主播通过话术、倒计时、限量等营造紧迫感，诱导冲动下单。' },
+  { question: '"消费降级"是指？', options: ['理性消费、减少不必要开支', '降低生活品质', '完全不消费'], answer: 0, explain: '消费降级不等于降低品质，而是减少不必要开支、回归理性。' },
+  { question: '"断舍离"的核心理念是？', options: ['极简主义', '只保留真正需要的东西', '以上都是'], answer: 1, explain: '断舍离强调只保留真正需要的东西，减少物欲负担。' },
+
+  // ===== 新增 100 道 · 数字金融与支付安全（10）=====
+  { question: '"数字人民币"是？', options: ['虚拟货币', '支付宝余额', '央行发行的法定数字货币'], answer: 2, explain: '数字人民币是央行发行的法定数字货币，与纸钞等价。' },
+  { question: '"刷脸支付"的主要风险是？', options: ['生物信息泄露', '无法识别', '速度慢'], answer: 0, explain: '人脸等生物信息一旦泄露无法更改，需谨慎授权。' },
+  { question: '"免密支付"应如何设置？', options: ['全部开启', '仅小额、可信场景开启', '从不开启'], answer: 1, explain: '免密支付应限制在小额、可信场景，降低盗刷风险。' },
+  { question: '"二维码支付"时应注意？', options: ['随意扫码', '不用核对', '核对收款方信息'], answer: 2, explain: '扫码前应核对收款方名称，避免扫到伪造码。' },
+  { question: '"钓鱼网站"的典型特征是？', options: ['域名与官网相似但有细微差别', '有 HTTPS 就安全', '页面精美'], answer: 0, explain: '钓鱼网站常用相似域名混淆，HTTPS 不代表安全。' },
+  { question: '"短信验证码"的正确使用方式是？', options: ['可告知客服', '绝不告知他人', '可发朋友圈'], answer: 1, explain: '验证码是账户最后一道防线，任何情况下都不应告知他人。' },
+  { question: '手机丢失后应首先？', options: ['报警', '买新手机', '挂失 SIM 卡、冻结支付账户'], answer: 2, explain: '先挂失 SIM 卡、冻结支付账户，防止被冒用。' },
+  { question: '公共 WiFi 下不宜进行？', options: ['网银转账等敏感操作', '看视频', '聊天'], answer: 0, explain: '公共 WiFi 可能被监听，敏感操作应使用移动网络。' },
+  { question: '"数字遗产"是指？', options: ['数字货币', '逝者留下的数字账户和资产', '虚拟货币'], answer: 1, explain: '数字遗产包括社交账号、云盘、虚拟货币等数字资产。' },
+  { question: '"跨境支付"时需注意？', options: ['汇率', '手续费', '以上都是'], answer: 2, explain: '跨境支付需关注汇率、手续费、到账时间等。' },
+
+  // ===== 新增 100 道 · 国际金融与汇率（10）=====
+  { question: '"美元指数"衡量的是？', options: ['美元对一篮子货币的汇率', '美元利率', '美国 GDP'], answer: 0, explain: '美元指数衡量美元对一篮子主要货币的汇率强弱。' },
+  { question: '"汇率避险"常用工具是？', options: ['股票', '远期结售汇', '基金'], answer: 1, explain: '远期结售汇、期权等是常用的汇率避险工具。' },
+  { question: '"购买力平价"理论认为长期汇率由什么决定？', options: ['利率', '政治', '两国物价水平'], answer: 2, explain: '购买力平价认为长期汇率趋近于两国物价水平之比。' },
+  { question: '"美联储加息"通常会导致？', options: ['美元走强', '美元走弱', '无影响'], answer: 0, explain: '加息提高美元资产吸引力，通常推动美元走强。' },
+  { question: '"人民币汇率"的报价方式是？', options: ['间接标价法', '直接标价法', '双向报价'], answer: 1, explain: '人民币采用直接标价法，即 1 美元兑多少人民币。' },
+  { question: '"外汇储备"的主要用途是？', options: ['投资股票', '发工资', '稳定汇率、国际支付'], answer: 2, explain: '外汇储备用于稳定汇率、国际支付和应对金融风险。' },
+  { question: '"资本外流"通常会导致？', options: ['本币贬值压力', '本币升值', '无影响'], answer: 0, explain: '资本外流增加本币抛压，通常导致本币贬值。' },
+  { question: '"QDII 基金"投资海外时主要承担？', options: ['只有市场风险', '汇率风险', '无风险'], answer: 1, explain: 'QDII 基金除市场风险外，还承担人民币与外币之间的汇率风险。' },
+  { question: '"国际收支顺差"是指？', options: ['支出大于收入', '平衡', '收入大于支出'], answer: 2, explain: '国际收支顺差指一国对外收入大于支出。' },
+  { question: '"SWIFT 系统"是？', options: ['国际银行间通信系统', '支付平台', '交易所'], answer: 0, explain: 'SWIFT 是全球银行间金融通信系统，用于跨境报文传输。' },
+
+  // ===== 新增 100 道 · 行为经济学进阶（10）=====
+  { question: '"前景理论"的核心观点是？', options: ['人对损失比对收益更敏感', '人总是理性', '人总是冒险'], answer: 0, explain: '前景理论认为人对损失的痛苦大于同等收益的快乐。' },
+  { question: '"心理账户"是指？', options: ['银行账户', '人们把不同来源的钱分门别类', '会计科目'], answer: 1, explain: '人们会把工资、奖金、意外之财放进不同的"心理账户"。' },
+  { question: '"确认偏误"是指？', options: ['客观分析', '随机决策', '只关注支持自己观点的信息'], answer: 2, explain: '确认偏误让人只寻找支持自己观点的信息，忽略反面证据。' },
+  { question: '"过度自信"在投资中会导致？', options: ['频繁交易、亏损', '稳健收益', '无影响'], answer: 0, explain: '过度自信导致频繁交易、集中持仓，长期收益反而更差。' },
+  { question: '"后见之明偏误"是指？', options: ['预见未来', '事后觉得"我早就知道"', '记忆好'], answer: 1, explain: '事后觉得事情"理所当然"，会高估自己的判断力。' },
+  { question: '"框架效应"是指？', options: ['框架结构', '思维方式', '同一问题的不同表述导致不同决策'], answer: 2, explain: '同一问题用"收益"或"损失"表述，会让人做出不同选择。' },
+  { question: '"沉没成本谬误"是指？', options: ['因已投入而继续错误决策', '理性止损', '忽略成本'], answer: 0, explain: '因已投入时间、金钱而继续错误决策，是典型的沉没成本谬误。' },
+  { question: '"从众心理"在投资中表现为？', options: ['独立思考', '追涨杀跌', '分散投资'], answer: 1, explain: '从众心理让人在市场狂热时追涨、恐慌时杀跌。' },
+  { question: '"过度反应"是指？', options: ['反应不足', '无反应', '市场对新信息反应过度'], answer: 2, explain: '市场常对新信息反应过度，导致价格超调。' },
+  { question: '"心理韧性"在投资中是指？', options: ['承受波动的能力', '预测能力', '运气'], answer: 0, explain: '心理韧性是面对市场波动时保持理性的能力。' },
+
+  // ===== 新增 100 道 · 老年理财与养老规划（10）=====
+  { question: '"养老金替代率"是指？', options: ['退休金 / 退休前工资', '养老金 / GDP', '储蓄 / 收入'], answer: 0, explain: '养老金替代率衡量退休后收入相对退休前的比例。' },
+  { question: '"三支柱养老体系"中第一支柱是？', options: ['企业年金', '基本养老保险', '个人养老金'], answer: 1, explain: '第一支柱是基本养老保险，第二支柱是企业年金，第三支柱是个人养老金。' },
+  { question: '"以房养老"是指？', options: ['买房养老', '租房养老', '把房产抵押换取养老金'], answer: 2, explain: '以房养老是通过反向抵押等方式，把房产转化为养老现金流。' },
+  { question: '老年人理财最应优先考虑？', options: ['安全性和流动性', '高收益', '长期锁定期'], answer: 0, explain: '老年人风险承受能力较低，安全性和流动性优先。' },
+  { question: '"养老目标基金"的特点是？', options: ['高风险', '随年龄调整风险', '短期'], answer: 1, explain: '养老目标基金通常随目标日期临近，逐步降低风险资产比例。' },
+  { question: '老年人防诈最关键的是？', options: ['多投资', '相信熟人', '不轻信高收益承诺'], answer: 2, explain: '高收益零风险是典型诈骗话术，老年人应尤其警惕。' },
+  { question: '"长期护理保险"主要应对？', options: ['失能护理费用', '医疗费用', '住院费用'], answer: 0, explain: '长期护理险主要覆盖因失能产生的长期护理费用。' },
+  { question: '"退休规划"应提前多久开始？', options: ['退休前 5 年', '越早越好', '退休后'], answer: 1, explain: '退休规划越早开始，复利效应越明显。' },
+  { question: '"遗产规划"中最常见的工具是？', options: ['保险', '信托', '遗嘱'], answer: 2, explain: '遗嘱是最常见的遗产规划工具，保险和信托也是常用工具。' },
+  { question: '"养老社区"选择时应重点考虑？', options: ['医疗配套', '环境', '以上都是'], answer: 2, explain: '医疗配套、环境、费用、交通等都需综合考虑。' },
+
+  // ===== 新增 100 道 · 儿童财商与教育金（10）=====
+  { question: '儿童财商教育应从几岁开始？', options: ['3-6 岁', '12 岁', '18 岁'], answer: 0, explain: '3-6 岁是儿童金钱观形成的关键期，可以从认识钱币开始。' },
+  { question: '"零花钱"制度的主要目的是？', options: ['让孩子有钱花', '让孩子学会管理金钱', '奖励成绩'], answer: 1, explain: '零花钱的核心是让孩子在实践中学习预算、储蓄和消费。' },
+  { question: '教孩子"储蓄"最有效的方式是？', options: ['给储蓄罐', '强制存钱', '开设儿童账户、设定目标'], answer: 2, explain: '让孩子参与开户、设定目标，比单纯给储蓄罐更有效。' },
+  { question: '"教育金保险"的特点是？', options: ['强制储蓄、专款专用', '高收益', '随时可取'], answer: 0, explain: '教育金保险的核心是强制储蓄和专款专用，收益不是首要目标。' },
+  { question: '"财商"包括？', options: ['只有赚钱', '赚钱、花钱、存钱、投资的能力', '只有省钱'], answer: 1, explain: '财商是综合能力，包括赚钱、花钱、存钱、投资等多方面。' },
+  { question: '让孩子参与家庭购物决策的好处是？', options: ['培养金钱观', '学会比较', '以上都是'], answer: 2, explain: '参与购物决策能培养孩子的金钱观、比较能力和责任感。' },
+  { question: '"儿童基金定投"的优势是？', options: ['长期复利', '平滑成本、分散风险', '以上都是'], answer: 2, explain: '定投结合长期复利和平滑成本，适合教育金等长期目标。' },
+  { question: '教育金规划应优先考虑？', options: ['安全性', '高收益', '短期'], answer: 0, explain: '教育金是刚性支出，安全性优先于收益。' },
+  { question: '"财商教育"中家长最应以身作则的是？', options: ['攀比', '理性消费', '冲动购物'], answer: 1, explain: '家长的消费行为是孩子最直接的学习对象。' },
+  { question: '"儿童保险"配置顺序通常是？', options: ['重疾险 → 意外险', '随便', '意外险 → 医疗险 → 重疾险'], answer: 2, explain: '儿童保险一般按意外险、医疗险、重疾险的顺序配置。' },
+
+  // ===== 新增 100 道 · 创业融资与股权（10）=====
+  { question: '"天使投资"通常发生在？', options: ['创业早期', '上市前', '成熟期'], answer: 0, explain: '天使投资通常发生在创业早期，风险高、金额相对小。' },
+  { question: '"VC"是指？', options: ['债券', '风险投资', '保险'], answer: 1, explain: 'VC（Venture Capital）即风险投资，主要投资成长期企业。' },
+  { question: '"PE"是指？', options: ['公募基金', '债券', '私募股权'], answer: 2, explain: 'PE（Private Equity）即私募股权，主要投资成熟期企业。' },
+  { question: '"估值"是指？', options: ['公司值多少钱', '利润', '收入'], answer: 0, explain: '估值是对公司价值的评估，常用市盈率、市销率等方法。' },
+  { question: '"股权稀释"是指？', options: ['股价下跌', '原股东持股比例下降', '利润下降'], answer: 1, explain: '新一轮融资发行新股，原股东持股比例会被稀释。' },
+  { question: '"对赌协议"常见于？', options: ['银行存款', '保险', '创业融资'], answer: 2, explain: '对赌协议常见于创业融资，约定业绩目标未达成时的补偿条款。' },
+  { question: '"IPO"是指？', options: ['首次公开募股', '并购', '债券'], answer: 0, explain: 'IPO（Initial Public Offering）即首次公开发行股票。' },
+  { question: '"股权激励"的主要目的是？', options: ['发工资', '绑定核心员工利益', '融资'], answer: 1, explain: '股权激励让核心员工与公司长期利益绑定。' },
+  { question: '"融资轮次"通常按什么排序？', options: ['C 轮 → B 轮', '随意', '天使 → A 轮 → B 轮 → C 轮'], answer: 2, explain: '融资轮次通常按天使、A、B、C 轮依次推进。' },
+  { question: '"退出机制"在投资中是指？', options: ['如何变现退出', '破产', '清算'], answer: 0, explain: '退出机制是投资者如何将股权变现，如 IPO、并购、回购等。' },
+
+  // ===== 新增 100 道 · 税务进阶与合法节税（10）=====
+  { question: '"个税汇算清缴"通常在每年？', options: ['3-6 月', '1 月', '12 月'], answer: 0, explain: '个税汇算清缴通常在次年 3 月 1 日至 6 月 30 日进行。' },
+  { question: '"专项附加扣除"中住房租金扣除标准？', options: ['全国统一', '按城市不同', '无标准'], answer: 1, explain: '住房租金扣除按城市规模不同，标准从 800 到 1500 元不等。' },
+  { question: '"个人所得税"的税率形式是？', options: ['比例税率', '定额', '超额累进'], answer: 2, explain: '综合所得适用 3%-45% 的超额累进税率。' },
+  { question: '"税收筹划"的合法边界是？', options: ['合法合规', '可以逃税', '可以虚报'], answer: 0, explain: '税收筹划必须在合法合规范围内，否则构成逃税。' },
+  { question: '"增值税小规模纳税人"的征收率通常是？', options: ['13%', '3%', '25%'], answer: 1, explain: '小规模纳税人增值税征收率通常为 3%（部分时期有优惠）。' },
+  { question: '"企业所得税"的标准税率是？', options: ['15%', '20%', '25%'], answer: 2, explain: '企业所得税标准税率为 25%，高新技术企业可享 15%。' },
+  { question: '"年终奖"计税方式的选择应？', options: ['比较两种方式择低', '必须单独', '必须并入'], answer: 0, explain: '年终奖可选单独计税或并入综合所得，应比较后择低适用。' },
+  { question: '"个人所得税"的居民个人判定标准之一是？', options: ['有房', '在中国境内居住满 183 天', '有工作'], answer: 1, explain: '在中国境内居住满 183 天的个人为居民个人。' },
+  { question: '"发票"在个税中的作用是？', options: ['无作用', '抵税', '部分扣除凭证'], answer: 2, explain: '发票是部分专项附加扣除和经营所得扣除的凭证。' },
+  { question: '"偷税"与"节税"的本质区别是？', options: ['是否合法', '金额大小', '时间'], answer: 0, explain: '节税合法，偷税违法，本质区别在于是否遵守税法。' }
 ];

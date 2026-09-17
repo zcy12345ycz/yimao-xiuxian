@@ -56,7 +56,7 @@ function gameLoop(){
     const dt=Math.min((now-lastTickT)/1000,5);
     if(s.created&&s.discipleList.length>0){s.online=true;tickDiscipleGains(dt,false)}
     s.lastTick=now;lastTickT=now;
-    tickAge();tickLoyalty();
+    tickAge();tickLoyalty();tickEnergy();
   }
   if(now-lastUIT>1000){renderUI();lastUIT=now}
   if(now-lastQuickUIT>200){renderQuickStats();lastQuickUIT=now}
@@ -85,33 +85,30 @@ function gameLoop(){
     checkYearbook();
     checkDefection();
   }
-  requestAnimationFrame(gameLoop);
-}
-function ensureAudioInit(){
+}function ensureAudioInit(){
   const h = () => {
     AudioSys.init();
     AudioSys.resume();
     
     // 检查 BGM 并在用户交互后播放
     const bgm = document.getElementById('bgm');
-    if (bgm && AudioSys.enabled) {
-      if (bgm.paused) {
-        bgm.volume = 0; // 初始音量设为 0
-        bgm.play().then(() => {
-          // 播放成功后，在 1.5 秒内平滑淡入到 0.2
-          let vol = 0;
-          const fadeIn = setInterval(() => {
-            if (vol < 0.2) {
-              vol += 0.01;
-              bgm.volume = Math.min(0.2, vol);
-            } else {
-              clearInterval(fadeIn);
-            }
-          }, 50);
-        }).catch(err => {
-          console.log('等待下一次点击以恢复音频:', err);
-        });
+    if (bgm) {
+      // 首次交互：如果有音乐，开始播放
+      if (s.musicEnabled && bgm.paused) {
+        updateBgm();
       }
+      // 监听播放结束，随机歇 30 秒到 2 分钟后再播
+      bgm.addEventListener('ended', () => {
+        if (!s.musicEnabled) return;
+        const delay = 30000 + Math.random() * 90000; // 30秒 ~ 120秒
+        console.log(`🎵 BGM 播放结束，将在 ${Math.round(delay/1000)} 秒后重新播放`);
+        setTimeout(() => {
+          if (s.musicEnabled && _userHasInteracted) {
+            bgm.currentTime = 0;
+            bgm.play().catch(e => {});
+          }
+        }, delay);
+      }, { once: false });
     }
     
     setTimeout(() => {
@@ -196,6 +193,9 @@ if(toggleBtn) {
 }
 
 el.btnReport.onclick=(e)=>{e.stopPropagation();AudioSys.click();if(s.discipleList.length===0){toast('还没有弟子，先收徒');return}openMemos()};
+el.btnLijian.onclick=(e)=>{e.stopPropagation();AudioSys.click();openSectHome()};
+const dailyBtn = document.getElementById('btnDailySummary');
+if(dailyBtn) dailyBtn.onclick = (e) => { e.stopPropagation(); AudioSys.click(); openDailySummary(); };
 el.btnRecruit.onclick=(e)=>{
   e.stopPropagation();
   AudioSys.click();
@@ -205,31 +205,77 @@ el.btnRecruit.onclick=(e)=>{
     openRecruit();
   }
 };
-el.soundQuickBtn.onclick=(e)=>{e.stopPropagation();AudioSys.init();AudioSys.resume();AudioSys.enabled=!AudioSys.enabled;if(AudioSys.enabled)AudioSys.click();renderUI();save();setTimeout(()=>{if(!AudioSys.ctx)toast('点击屏幕激活音效');else toast(AudioSys.enabled?'音效已开启':'音效已关闭')},50)};
-el.helpQuickBtn.onclick=(e)=>{e.stopPropagation();AudioSys.click();openHelp()};
-el.donateQuickBtn.onclick=(e)=>{e.stopPropagation();AudioSys.click();openDonate()};
-el.menuBtn.onclick=(e)=>{e.stopPropagation();AudioSys.click();const w=!el.menuPop.classList.contains('show');el.menuPop.classList.toggle('show');if(w)tryShowTip('firstMenuOpen')};
+el.soundQuickBtn.onclick=(e)=>{
+  e.stopPropagation();
+  AudioSys.init();
+  AudioSys.resume();
+  const anyOn = s.musicEnabled || AudioSys.enabled;
+  const newState = !anyOn;
+  s.musicEnabled = newState;
+  AudioSys.enabled = newState;
+  updateBgm();
+  renderUI();
+  save();
+  toast(newState ? '声音已开启' : '声音已关闭');
+};
+el.signInQuickBtn.onclick=(e)=>{
+  e.stopPropagation();
+  AudioSys.click();
+  showSignInModal();
+};
+if(el.helpQuickBtn){
+  el.helpQuickBtn.onclick=(e)=>{
+    e.stopPropagation();
+    AudioSys.click();
+    openHelp();
+  };
+}
+el.menuHelp.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openHelp()};
+el.menuDonate.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openDonate()};
+(function(){
+  const btn=el.menuBtn;
+  btn.onclick=(e)=>{
+    e.stopPropagation();
+    AudioSys.click();
+    const w=!el.menuPop.classList.contains('show');
+    el.menuPop.classList.toggle('show');
+    if(w){tryShowTip('firstMenuOpen')}
+  };
+})();
 document.addEventListener('click',(e)=>{if(!el.menuPop.contains(e.target)&&e.target!==el.menuBtn&&e.target!==el.menuBtnDot)el.menuPop.classList.remove('show')});
-el.menuClaimAll.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();autoClaimAll()};
-el.menuSignIn.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();showSignInModal()};
-el.menuDaily.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openDaily()};
-el.menuWeekly.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openWeekly()};
-el.menuDisciples.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openDisciples()};
-el.menuRelations.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openRelations()};
-el.menuMoonOrder.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openMoonOrder()};
-el.menuVice.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openVice()};
-el.menuExpedition.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openExpedition()};
-el.menuSect.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openSect()};
-el.menuMijing.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openMijingSelect()};
-el.menuRelic.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openRelics()};
-el.menuChronicle.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openChronicle()};
-el.menuYearbook.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openYearbook()};
-el.menuAchieve.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openAchievements()};
-el.menuLegacy.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openLegacy()};
 el.menuSave.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openSaveManage()};
 el.menuSettings.onclick=()=>{el.menuPop.classList.remove('show');AudioSys.click();openSettings()};
+if(el.donateFab){
+  el.donateFab.onclick=(e)=>{
+    e.stopPropagation();
+    AudioSys.click();
+    openDonate();
+  };
+  // 5 秒无操作自动淡到 35% 透明度
+  let _donateFadeTimer=null;
+  function _donateWake(){
+    el.donateFab.classList.remove('idle');
+    clearTimeout(_donateFadeTimer);
+    _donateFadeTimer=setTimeout(()=>el.donateFab.classList.add('idle'),5000);
+  }
+  el.donateFab.addEventListener('touchstart',_donateWake,{passive:true});
+  el.donateFab.addEventListener('mousedown',_donateWake);
+  el.donateFab.addEventListener('mouseenter',_donateWake);
+  _donateWake();
+}
 if(el.charArea)el.charArea.addEventListener('click',(e)=>{e.stopPropagation();handleCharClick()});
 if(el.moonOrderRow)el.moonOrderRow.addEventListener('click',(e)=>{e.stopPropagation();AudioSys.click();openMoonOrder()});
+if(el.taskProgressRow)el.taskProgressRow.addEventListener('click',(e)=>{
+  e.stopPropagation();
+  AudioSys.click();
+  // 优先看未完成的：今日有未完成 → 打开今日；否则打开周任务
+  ensureDailyTasks();ensureWeekly();
+  const dt=s.daily.tasks||[];
+  const wt=s.weekly.tasks||[];
+  const dAll=dt.length>0&&dt.every(t=>t.done);
+  if(!dAll)openDaily();
+  else openWeekly();
+});
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){flushSave();return}
   if(!s.created||s.discipleList.length===0)return;
@@ -342,6 +388,6 @@ function init(){
     scheduleSignInCheck(1800);
     lastSaveT=Date.now();lastReportCheck=Date.now();lastTickT=Date.now();
   }
-  requestAnimationFrame(gameLoop);
 }
+setInterval(gameLoop, 200);
 init();

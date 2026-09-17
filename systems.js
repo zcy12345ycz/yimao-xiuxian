@@ -120,7 +120,7 @@ function handleDeath(d){
   addYearStat('deaths');
   const p=getP(d),r=realmOf(d.level);
   ModalQueue.push((next)=>{
-    let html='<div class="rip-box"><div class="rip-avatar">'+p.ic+'</div><div class="rip-name">'+d.name+' 化道</div>';
+    let html='<div class="rip-box"><div class="rip-avatar">'+svgAvatar(d,88)+'</div><div class="rip-name">'+d.name+' 化道</div>';
     html+='<div class="rip-desc">'+r.name+' · 享年 '+d.age+' 岁<br>「'+d.catchphrase+'」<br><br>弟子留下一件遗物：<br><span style="color:var(--purple);font-weight:700">'+relic.icon+' '+relic.name+'</span><br><span style="font-size:calc(12px * var(--fs-scale));color:var(--dim)">'+relic.desc+'</span></div></div>';
     html+='<button class="btn gold" style="width:100%;padding:15px;margin-top:14px" id="ripOk">送 别</button>';
     html+='<div class="watermark wm-modal">'+GAME_AUTHOR+'</div>';
@@ -205,6 +205,7 @@ function checkDefection(){
 function tickDiscipleGains(dt,isOffline){
   if(!s.created||s.discipleList.length===0)return;
   const now=Date.now();
+  const _toRemove=[];
   for(const d of s.discipleList){
     if(isOnExpedition(d))continue;
     const eg=discipleExpRate(d).mul(dt);
@@ -220,7 +221,9 @@ function tickDiscipleGains(dt,isOffline){
     let bg=0;
     while(d.exp.gte(expNeed(d.level))&&bg++<100){
       const isBig=(d.level%9)===8;
-      const rate=discipleBreakRate(d)*CONFIG.breakAttemptRate;
+      let rate=discipleBreakRate(d)*CONFIG.breakAttemptRate;
+      // 顿悟期：突破必成功
+      if(getActiveStates(d).some(st=>st.id==='enlightenment'))rate=1;
       if(Math.random()<rate){
         const usedForceBreak=!!d.forceBreak;
         d.exp=d.exp.sub(expNeed(d.level));
@@ -265,15 +268,28 @@ function tickDiscipleGains(dt,isOffline){
           }
         }
         if(isBig)checkTianjie(d,isBig);
-      }else{
+            }else{
         d.exp=d.exp.sub(expNeed(d.level).mul(isBig?CONFIG.breakFailLossBig:CONFIG.breakFailLossSmall));
         if(d.exp.lt(0))d.exp=new Dec(0,0);
         d.totalFails++;d.failStreak=(d.failStreak||0)+1;
         s.unreadLog.fails.push({name:d.name,personality:d.personality});
         changeLoyalty(d,CONFIG.loyaltyBreakFail,isOffline);
+        // 心魔期突破失败 → 有概率化道
+        if(getActiveStates(d).some(st=>st.id==='heart_demon')){
+          const deathChance=isBig?0.30:0.15;
+          if(Math.random()<deathChance){
+            addChronicle('state','🌑 <span class="hl">'+d.name+'</span> 心魔缠身，突破失败，道心崩塌……');
+            _toRemove.push(d);
+            break;
+          }
+        }
         break;
       }
     }
+  }
+  // 统一处理化道（避免在 for 循环里直接改动 s.discipleList）
+  for(const d of _toRemove){
+    handleDeath(d);
   }
 }
 
@@ -416,7 +432,7 @@ function processExpeditions(){
       ModalQueue.push((next)=>{
         let html='<div class="modal-title realm">🧭 归 来</div>';
         html+='<div class="modal-sub">'+d.name+' 从'+result.locName+'归来</div>';
-        html+='<div class="report-from"><div class="report-avatar">'+getP(d).ic+'</div><div class="report-meta"><div class="rm-name">'+d.name+'</div><div class="rm-title">'+realmOf(d.level).name+' · '+getP(d).n+'</div></div></div>';
+        html+='<div class="report-from"><div class="report-avatar">'+svgAvatar(d,48)+'</div><div class="report-meta"><div class="rm-name">'+d.name+'</div><div class="rm-title">'+realmOf(d.level).name+' · '+getP(d).n+'</div></div></div>';
         html+='<div class="offline-flavor" style="margin:10px 0"><span class="of-icon">📖</span>'+result.story+'</div>';
         html+='<div class="report-gain"><div class="rg-item"><div class="rg-val">+'+fmtExp(Dec.of(result.exp))+'</div><div class="rg-lbl">修为</div></div><div class="rg-item"><div class="rg-val">+'+fmtCoin(Dec.of(result.stone))+'</div><div class="rg-lbl">毛</div></div></div>';
         html+='<button class="btn gold" style="width:100%;padding:15px" id="expOk">收 到</button>';
@@ -575,8 +591,10 @@ function checkYearbook(){
 /* ============ 奏章 ============ */
 function generateMemo(isOffline){
   if(s.memos.length>=MAX_MEMOS)return null;
-  s.totalReports++;
-  const interval=getReportInterval();
+
+  // 【旧版遗留】quiz 奏章生成已停用，改由每日签到答题系统接管。
+  // 存档里已存在的 quiz memo 仍可通过奏章列表正常处理。
+  s.totalReports++;  const interval=getReportInterval();
   const ul=s.unreadLog;
   const memo={id:'m'+Date.now()+Math.floor(Math.random()*1000),time:Date.now(),interval,read:false,event:null,isOffline:!!isOffline,isAutoBank:false,
     totalExp:ul.exp.clone(),totalStone:ul.stone.clone(),breaks:ul.breaks.slice(),fails:ul.fails.slice(),
@@ -587,7 +605,16 @@ function generateMemo(isOffline){
   if(top){const p=getP(top);memo.greeting=pick(GREETINGS[p.id]);memo.voice=pick(getVoice(top))}
   memo.daily=getDailyDesc();
   if(!isOffline)memo.chatter=pickChatter();
-  memo.event=pickEvent();
+  memo.event = s.masterEnergy > 0 ? pickEvent() : null;
+  memo.eventSkipped = s.masterEnergy <= 0;
+
+  // 新增：如果没有事件（日常/闲聊/小突破），合并到宗门日结，不生成独立奏章
+  if (!memo.event && !memo.isQuiz) {
+    if (!s.dailyPendingRewards) s.dailyPendingRewards = { exp: new Dec(0,0), stone: new Dec(0,0) };
+    s.dailyPendingRewards.exp = s.dailyPendingRewards.exp.add(memo.totalExp);
+    s.dailyPendingRewards.stone = s.dailyPendingRewards.stone.add(memo.totalStone);
+    return null; // 返回 null，不推送到 s.memos
+  }
   if(s.viceEnabled&&!memo.event&&!isOffline){
     const cut=memo.totalStone.mul(VICE_CUT);
     const kept=memo.totalStone.sub(cut);
@@ -609,21 +636,25 @@ function flushAutoBank(){
   s.memos.unshift(memo);
   s.autoBank={exp:new Dec(0,0),stone:new Dec(0,0),breaks:[],count:0};
 }
-function applyChoiceOutcome(choice,outcome){
+function applyChoiceOutcome(choice,outcome,actor){
   const o=choice.outcomes[outcome];
   if(choice.cost&&choice.cost>0){const c=Dec.of(choice.cost);if(s.stones.gte(c))s.stones=s.stones.sub(c)}
   if(o){
-    let target=null;
-    if(o.exp&&s.discipleList.length>1){
-      const top=topDisciple();const others=s.discipleList.filter(d=>d.id!==top.id);
-      target=(others.length>0&&Math.random()<0.5)?pick(others):top;
-    }else if(o.exp)target=topDisciple();
+    // 主角优先：事件绑定的弟子承担因果；没有则退回首席
+    const target=actor||topDisciple();
     if(target&&o.exp!==undefined){
       target.exp=target.exp.add(Dec.of(o.exp));
       if(target.exp.lt(0))target.exp=new Dec(0,0);
     }
     if(o.stone){s.stones=s.stones.add(Dec.of(o.stone));if(s.stones.lt(0))s.stones=new Dec(0,0)}
-    if(o.loyalty&&target)changeLoyalty(target,o.loyalty); // === 新增：选择会改变弟子 ===
+    // 选择会改变弟子忠诚
+    if(o.loyalty&&target)changeLoyalty(target,o.loyalty);
+    if(target&&o.clearState){
+      if(Array.isArray(target.states))target.states=target.states.filter(st=>st.id!==o.clearState);
+    }
+    if(target&&o.addState){
+      addState(target,o.addState);
+    }
     if(target){
       const tag=choice.tag||'';
       // 激进选择 → 弟子变好胜/孤僻
