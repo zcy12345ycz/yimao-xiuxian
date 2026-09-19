@@ -89,8 +89,9 @@ function createDefaultState(){
     tutorialDone:false,
     firstBreakthroughDone:false,   // 是否完成过第一次突破
     // 历史
-chronicle:[], gufengCount:0, gufengDate:'', gufengNextAt:0, toldTalkIds:[],
-dongfuNextAt:0, dongfuChoice:''
+chronicle:[], gufengCount:0, gufengDate:'', gufengNextAt:Date.now(), toldTalkIds:[],
+dongfuNextAt:0, dongfuChoice:'',
+    dongfuEventSeen:[], dongfuEventChoices:{}, dongfuEventFirstAt:{}
   };
 }
 
@@ -136,6 +137,8 @@ function serializeState(){
     firstBreakthroughDone:s.firstBreakthroughDone,
 chronicle:s.chronicle, gufengCount:s.gufengCount, gufengDate:s.gufengDate, gufengNextAt:s.gufengNextAt, toldTalkIds:s.toldTalkIds,
 dongfuNextAt:s.dongfuNextAt, dongfuChoice:s.dongfuChoice,
+    dongfuEventSeen:s.dongfuEventSeen, dongfuEventChoices:s.dongfuEventChoices,
+    dongfuEventFirstAt:s.dongfuEventFirstAt,
   };
 }
 
@@ -193,8 +196,12 @@ function applySaveData(data){
     s.powerSave=!!data.powerSave;
     s.tutorialDone=!!data.tutorialDone;
     s.firstBreakthroughDone=!!data.firstBreakthroughDone;
-    s.chronicle=Array.isArray(data.chronicle)?data.chronicle:[]; s.gufengCount=typeof data.gufengCount==='number'?data.gufengCount:0; s.gufengDate=data.gufengDate||''; s.gufengNextAt=typeof data.gufengNextAt==='number'?data.gufengNextAt:0; s.toldTalkIds=Array.isArray(data.toldTalkIds)?data.toldTalkIds:[];
-s.dongfuNextAt=typeof data.dongfuNextAt==='number'?data.dongfuNextAt:0; s.dongfuChoice=data.dongfuChoice||'';
+    s.chronicle=Array.isArray(data.chronicle)?data.chronicle:[]; s.gufengCount=typeof data.gufengCount==='number'?data.gufengCount:0; s.gufengDate=data.gufengDate||''; s.gufengNextAt=typeof data.gufengNextAt==='number'?data.gufengNextAt:Date.now();s.toldTalkIds=Array.isArray(data.toldTalkIds)?data.toldTalkIds:[];
+s.dongfuNextAt=typeof data.dongfuNextAt==='number'?data.dongfuNextAt:0;
+s.dongfuChoice=data.dongfuChoice||'';
+s.dongfuEventSeen=Array.isArray(data.dongfuEventSeen)?data.dongfuEventSeen:[];
+s.dongfuEventChoices=(data.dongfuEventChoices&&typeof data.dongfuEventChoices==='object')?data.dongfuEventChoices:{};
+s.dongfuEventFirstAt=(data.dongfuEventFirstAt&&typeof data.dongfuEventFirstAt==='object')?data.dongfuEventFirstAt:{};
     applyFontSize();renderSplashStory();save();
   }catch(e){console.error('存档导入失败',e)}
 }

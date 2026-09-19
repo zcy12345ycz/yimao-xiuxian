@@ -290,7 +290,7 @@ html+='<div class="help-section"><div class="help-h">📜 红尘炼心</div><div
 
   html+='<div class="help-section"><div class="help-h">🏔️ 洞府修行</div><div class="help-p">在线每 <span class="hl">30 分钟</span> 刷新一次路线，右下角紫色按钮会脉冲提醒。<br>选一条路线，接下来 30 分钟享受对应加成：<br><span class="hl">🧘 吐纳打坐</span>：修为 +50%<br><span class="hl">💰 下山搞钱</span>：天机石掉落间隔减半<br><span class="hl">🌿 炼丹采药</span>：修为 +20%，突破成功率 +3%<br><br>冷却期间不能换路线，<span class="hl">但加成一直在跑</span>。<br>主界面修为条旁会显示当前路线和剩余分钟。</div></div>';
 
-  html+='<div class="help-section"><div class="help-h">🎲 机缘巧遇</div><div class="help-p">每次洞府刷新时，有 <span class="hl">20% 概率</span> 触发奇遇：<br>· 乞丐塞破铜钱<br>· 陨石砸坏炼丹炉<br>· 瓜娃子叫骂<br><br>每个奇遇两个选项，各有不同奖励（修为 / 道韵 / 天机石）。<br>奇遇结束后再选洞府路线。</div></div>';
+  html+='<div class="help-section"><div class="help-h">🎲 机缘巧遇</div><div class="help-p">每次洞府刷新时，有 <span class="hl">30% 概率</span> 触发奇遇。<br>洞府外偶遇一桩小事，两个选项，各有取舍：<br><span class="hl">乞丐塞破铜钱</span> · <span class="hl">陨石砸坏炼丹炉</span> · <span class="hl">瓜娃子叫骂</span><br><span class="hl">野狼堵路</span> · <span class="hl">仙桃落地</span> · <span class="hl">老头借宿</span><br><span class="hl">路边残剑</span> · <span class="hl">山下涨水</span><br><br>奖励大多是 <span class="hl">修为</span> / <span class="hl">道韵</span> / <span class="hl">天机石</span>。<br>洞府弹窗底部有 <span class="hl">📖 奇遇图鉴</span>，可以看自己遇到和选过的所有奇遇。</div></div>';
 
   html+='<div class="help-section"><div class="help-h">🎯 长线目标</div><div class="help-p">练气 → 筑基 → 金丹 → 元婴 → 化神<br>→ 炼虚 → 合体 → 大乘 → 渡劫 → 仙人<br><br>每境 9 层，共 <span class="hl">90 层</span>。<br>慢慢来，不急。</div></div>';
   
@@ -636,7 +636,7 @@ if(el.gufengFab){
 
 function openGufeng(){
   const nextTalk = pickGufengTalk();
-  
+
   let html = '<div class="modal-title">红 尘 炼 心</div>';
   html += '<div class="modal-sub">' + nextTalk.scene + '</div>';
   html += '<div class="tip-box" style="font-size:calc(14px * var(--fs-scale));line-height:1.8;text-align:center">' + nextTalk.line + '</div>';
@@ -645,17 +645,17 @@ function openGufeng(){
     html += '<button class="gift-opt" data-idx="' + i + '"><div class="go-icon">' + nextTalk.icon + '</div><div class="go-info"><div class="go-name">' + r.text + '</div></div></button>';
   });
   html += '</div>';
+  html += '<button class="btn" style="width:100%;margin-top:12px;padding:13px;border-color:rgba(230,196,115,.2);color:var(--dim)" id="gufengLater">下 次 再 说</button>';
   html += '<div class="watermark wm-modal">' + GAME_AUTHOR + '</div>';
-  
-  showModal(html, {noClose:true});
-  
-  document.querySelectorAll('.gift-opt').forEach(btn => {
+
+  showModal(html);
+
+  document.querySelectorAll('.gift-opt[data-idx]').forEach(btn => {
     btn.onclick = (e) => {
       e.stopPropagation();
       AudioSys.success();
       if(!s.toldTalkIds.includes(nextTalk.id)) s.toldTalkIds.push(nextTalk.id);
-      // 动态计算奖励：当前升级所需修为的 50%
-const guFengReward = Math.floor(getExpNeeded(s.realm, s.layer) * 0.2);
+      const guFengReward = Math.floor(getExpNeeded(s.realm, s.layer) * 0.2);
       s.exp += guFengReward;
       s.gufengCount++;
       s.gufengNextAt = Date.now() + 2 * 3600 * 1000;
@@ -665,8 +665,15 @@ const guFengReward = Math.floor(getExpNeeded(s.realm, s.layer) * 0.2);
       renderUI();
     };
   });
-}
 
+  if($('gufengLater')){
+    $('gufengLater').onclick = (e) => {
+      e.stopPropagation();
+      AudioSys.click();
+      hideModal();
+    };
+  }
+}
 /* ============ 突破按钮 ============ */
 if(el.breakthroughBtn){
   el.breakthroughBtn.onclick = (e) => {
@@ -831,6 +838,18 @@ function openDevPanel(){
   html += '<button class="btn" style="width:100%;margin-bottom:6px" id="devResetGufengCount">重置今日次数</button>';
   html += '</div>';
 
+  html += '<div class="settings-group"><div class="settings-group-h">洞 府</div>';
+  html += '<button class="btn" style="width:100%;margin-bottom:6px" id="devResetDongfu">重置冷却（立刻可换）</button>';
+  html += '<button class="btn" style="width:100%;margin-bottom:6px" id="devResetDongfuChoice">清空当前路线</button>';
+  html += '<button class="btn" style="width:100%;margin-bottom:6px" id="devForceEvent">强制触发一次奇遇</button>';
+  html += '<button class="btn" style="width:100%;margin-bottom:6px;border-color:var(--red);color:var(--red)" id="devClearCodex">清空图鉴记录</button>';
+  html += '</div>';
+
+  html += '<div class="settings-group"><div class="settings-group-h">天 象</div>';
+  html += '<button class="btn" style="width:100%;margin-bottom:6px" id="devToggleTianxiang">今 日 吉 日（切换）</button>';
+  html += '<button class="btn" style="width:100%;margin-bottom:6px" id="devRefreshTianxiang">重 新 随 机 本 月 吉 日</button>';
+  html += '</div>';
+
   html += '<div class="settings-group"><div class="settings-group-h">天 象</div>';
   html += '<button class="btn" style="width:100%;margin-bottom:6px" id="devToggleTianxiang">今 日 吉 日（切换）</button>';
   html += '<button class="btn" style="width:100%;margin-bottom:6px" id="devRefreshTianxiang">重 新 随 机 本 月 吉 日</button>';
@@ -871,6 +890,40 @@ function openDevPanel(){
     renderUI();
     toast('红尘炼心今日次数已重置');
   };
+
+  // 洞府：重置冷却
+  document.getElementById('devResetDongfu').onclick = (e) => {
+    e.stopPropagation();
+    s.dongfuNextAt = Date.now() - 1000;
+    save();
+    renderUI();
+    toast('洞府冷却已重置，🏔️ 按钮已脉冲');
+  };
+  // 洞府：清空当前路线
+  document.getElementById('devResetDongfuChoice').onclick = (e) => {
+    e.stopPropagation();
+    s.dongfuChoice = '';
+    save();
+    renderUI();
+    toast('当前路线已清空');
+  };
+  // 洞府：强制触发奇遇
+  document.getElementById('devForceEvent').onclick = (e) => {
+    e.stopPropagation();
+    hideModal();
+    setTimeout(() => openDongfuEvent(() => openDongfuRouteSelect()), 350);
+  };
+  // 洞府：清空图鉴
+  document.getElementById('devClearCodex').onclick = (e) => {
+    e.stopPropagation();
+    if(!confirm('确定清空图鉴记录吗？')) return;
+    s.dongfuEventSeen = [];
+    s.dongfuEventChoices = {};
+    save();
+    renderUI();
+    toast('图鉴记录已清空');
+  };
+
   document.getElementById('devToggleTianxiang').onclick = (e) => {
     e.stopPropagation();
     const d = new Date();
@@ -961,9 +1014,24 @@ function openDongfu(){
   }
 }
 
+/* 按稀有度权重随机抽一个奇遇 */
+function pickDongfuEventByRarity(){
+  const total = DONGFU_EVENTS.reduce((sum, e) => {
+    const r = DONGFU_RARITY[e.rarity] || DONGFU_RARITY.common;
+    return sum + r.weight;
+  }, 0);
+  let roll = Math.random() * total;
+  for(const e of DONGFU_EVENTS){
+    const r = DONGFU_RARITY[e.rarity] || DONGFU_RARITY.common;
+    roll -= r.weight;
+    if(roll < 0) return e;
+  }
+  return DONGFU_EVENTS[0];
+}
+
 /* ============ 洞府 · 奇遇弹窗 ============ */
 function openDongfuEvent(onComplete){
-  const ev = DONGFU_EVENTS[Math.floor(Math.random() * DONGFU_EVENTS.length)];
+  const ev = pickDongfuEventByRarity();
 
   let html = '<div class="modal-title" style="color:var(--purple)">机 缘 巧 遇</div>';
   html += '<div class="modal-sub">洞府之外，偶遇一桩小事</div>';
@@ -980,16 +1048,34 @@ function openDongfuEvent(onComplete){
     html += '<div class="go-info"><div class="go-name">' + opt.text + '</div></div>';
     html += '</button>';
   });
-  html += '</div></div>';
-  html += '<div class="watermark wm-modal">' + GAME_AUTHOR + '</div>';
+  html += '</div>';
 
+  html += '<button class="btn realm" style="width:100%;margin-top:10px;padding:12px" id="dongfuCodex">📖 奇 遇 图 鉴（' + s.dongfuEventSeen.length + ' / ' + DONGFU_EVENTS.length + '）</button>';
+  html += '<div class="watermark wm-modal">' + GAME_AUTHOR + '</div>';
   showModal(html, { noClose: true });
+
+  if($('dongfuCodex')){
+    $('dongfuCodex').onclick = (e) => {
+      e.stopPropagation();
+      AudioSys.click();
+      openDongfuCodex();
+    };
+  }
 
   document.querySelectorAll('[data-opt]').forEach(btn => {
     btn.onclick = (e) => {
       e.stopPropagation();
       const i = parseInt(btn.dataset.opt);
       AudioSys.success();
+
+      // 记录：已遇到
+      if(!s.dongfuEventSeen.includes(ev.id)) s.dongfuEventSeen.push(ev.id);
+      // 记录：首次遇到时间
+      if(!s.dongfuEventFirstAt[ev.id]) s.dongfuEventFirstAt[ev.id] = Date.now();
+      // 记录：选过哪个选项
+      if(!s.dongfuEventChoices[ev.id]) s.dongfuEventChoices[ev.id] = [];
+      if(!s.dongfuEventChoices[ev.id].includes(i)) s.dongfuEventChoices[ev.id].push(i);
+
       ev.options[i].apply();
       save();
       hideModal();
@@ -1038,8 +1124,17 @@ function openDongfuRouteSelect(){
   });
   html += '</div>';
 
+  html += '<button class="btn realm" style="width:100%;margin-top:10px;padding:12px" id="dongfuCodex2">📖 奇 遇 图 鉴（' + s.dongfuEventSeen.length + ' / ' + DONGFU_EVENTS.length + '）</button>';
   html += '<div class="watermark wm-modal">' + GAME_AUTHOR + '</div>';
   showModal(html);
+
+  if($('dongfuCodex2')){
+    $('dongfuCodex2').onclick = (e) => {
+      e.stopPropagation();
+      AudioSys.click();
+      openDongfuCodex();
+    };
+  }
 
   if(ready){
     // 冷却就绪：可以选
@@ -1075,4 +1170,112 @@ if(el.dongfuFab){
     AudioSys.click();
     openDongfu();
   };
+}
+
+/* ============ 洞府 · 奇遇图鉴 ============ */
+function openDongfuCodex(){
+  const total = DONGFU_EVENTS.length;
+  const seenCount = s.dongfuEventSeen.length;
+  const fullCount = DONGFU_EVENTS.filter(ev => {
+    const choices = s.dongfuEventChoices[ev.id] || [];
+    return choices.length >= ev.options.length;
+  }).length;
+
+  // 分稀有度统计
+  const stats = {};
+  Object.keys(DONGFU_RARITY).forEach(k => { stats[k] = { total: 0, seen: 0 }; });
+  DONGFU_EVENTS.forEach(ev => {
+    const key = ev.rarity || 'common';
+    if(!stats[key]) stats[key] = { total: 0, seen: 0 };
+    stats[key].total++;
+    if(s.dongfuEventSeen.includes(ev.id)) stats[key].seen++;
+  });
+
+  let html = '<div class="modal-title">奇 遇 图 鉴</div>';
+  html += '<div class="modal-sub">已遇 ' + seenCount + ' / ' + total + ' · 全选 ' + fullCount + ' / ' + total + '</div>';
+
+  // 稀有度进度条
+  html += '<div class="codex-stats">';
+  ['common','rare','epic'].forEach(key => {
+    const r = DONGFU_RARITY[key];
+    if(!r) return;
+    const st = stats[key] || { total: 0, seen: 0 };
+    if(st.total === 0) return;
+    const done = st.seen >= st.total;
+    html += '<span class="codex-stat" style="color:' + r.color + ';border-color:' + r.color + (done ? ';background:rgba(230,196,115,.08)' : '') + '">';
+    html += r.n + ' ' + st.seen + '/' + st.total;
+    if(done) html += ' ✓';
+    html += '</span>';
+  });
+  html += '</div>';
+
+  html += '<div class="codex-list">';
+  DONGFU_EVENTS.forEach(ev => {
+    const seen = s.dongfuEventSeen.includes(ev.id);
+    const choices = s.dongfuEventChoices[ev.id] || [];
+    const isFull = choices.length >= ev.options.length;
+
+    if(seen){
+      const rarity = DONGFU_RARITY[ev.rarity] || DONGFU_RARITY.common;
+      html += '<div class="codex-item ' + (isFull ? 'full' : 'seen') + '">';
+      html += '<div class="codex-icon">' + ev.ic + '</div>';
+      html += '<div class="codex-info">';
+      html += '<div class="codex-name">' + ev.n;
+      html += ' <span class="codex-rarity" style="color:' + rarity.color + ';border-color:' + rarity.color + '">' + rarity.n + '</span>';
+      if(isFull) html += ' <span class="codex-badge">✓ 全选</span>';
+      html += '</div>';
+      html += '<div class="codex-time">首次遇到 · ' + fmtCodexTime(s.dongfuEventFirstAt[ev.id]) + '</div>';
+      html += '<div class="codex-desc">' + ev.desc + '</div>';
+      html += '<div class="codex-options">';
+      ev.options.forEach((opt, i) => {
+        const chosen = choices.includes(i);
+        html += '<span class="codex-opt ' + (chosen ? 'chosen' : '') + '">' + (chosen ? '●' : '○') + ' ' + opt.text + '</span>';
+      });
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+    } else {
+      const rarity = DONGFU_RARITY[ev.rarity] || DONGFU_RARITY.common;
+      html += '<div class="codex-item locked">';
+      html += '<div class="codex-icon">❓</div>';
+      html += '<div class="codex-info">';
+      html += '<div class="codex-name">???';
+      html += ' <span class="codex-rarity" style="color:' + rarity.color + ';border-color:' + rarity.color + '">' + rarity.n + '</span>';
+      html += '</div>';
+      html += '<div class="codex-desc">尚未遇到，静待机缘。</div>';
+      html += '</div>';
+      html += '</div>';
+    }
+  });
+  html += '</div>';
+
+  html += '<button class="btn" style="width:100%;margin-top:14px;padding:14px" id="codexBack">返 回 洞 府</button>';
+  html += '<div class="watermark wm-modal">' + GAME_AUTHOR + '</div>';
+  showModal(html);
+
+  if($('codexBack')){
+    $('codexBack').onclick = (e) => {
+      e.stopPropagation();
+      AudioSys.click();
+      openDongfuRouteSelect();
+    };
+  }
+}
+
+/* ============ 图鉴 · 时间格式化 ============ */
+function fmtCodexTime(ts){
+  if(!ts) return '未知';
+  const d = new Date(ts);
+  const now = new Date();
+  const sameYear = d.getFullYear() === now.getFullYear();
+  const sameDay = sameYear && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  if(sameDay){
+    const h = String(d.getHours()).padStart(2,'0');
+    const m = String(d.getMinutes()).padStart(2,'0');
+    return '今天 ' + h + ':' + m;
+  }
+  const diffDays = Math.floor((now - d) / 86400000);
+  if(diffDays < 7) return diffDays + ' 天前';
+  if(sameYear) return (d.getMonth()+1) + '月' + d.getDate() + '日';
+  return d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日';
 }

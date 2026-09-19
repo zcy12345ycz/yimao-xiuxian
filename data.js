@@ -1,5 +1,5 @@
 /* ============ 版本 ============ */
-const GAME_VERSION='v0.2.0';
+const GAME_VERSION='v0.4.5';
 const BGM_TRACKS = ['bgm.mp3', 'bgm1.mp3'];
 const GAME_AUTHOR='Zhao | Struct. E.';
 const CURRENT_SAVE_VERSION=6;
@@ -114,10 +114,11 @@ const REALMS = [
   { id: 'xianren',  n: '仙人', baseExp: 230400, color: '#ffffff' }
 ];
 
-/* 修为需求：大境界第 9 层 ×2 作为门槛 */
+/* 修为需求：大境界第 9 层 ×2 作为门槛，再乘难度系数 */
 function getExpNeeded(realmIdx, layer) {
   const r = REALMS[realmIdx] || REALMS[0];
-  return layer === 9 ? r.baseExp * 2 : r.baseExp;
+  const base = layer === 9 ? r.baseExp * 2 : r.baseExp;
+  return base * DIFFICULTY_MULT;
 }
 
 function getRealmName(realmIdx, layer) {
@@ -130,8 +131,17 @@ function getRealmColor(realmIdx) {
 }
 
 /* ============ 修炼速度 ============ */
-const CULTIVATE_RATE_ONLINE  = 1.0;   // 在线 1.0 修为/秒
-const CULTIVATE_RATE_OFFLINE = 0.4;   // 离线 0.4 修为/秒
+/* ============ 难度系数 ============
+ * 1 = 原版速度
+ * 2 = 慢一倍（推荐新手）
+ * 3 = 慢三倍（推荐）
+ * 5 = 硬核
+ * 改这一个数字，整体节奏跟着变
+ */
+const DIFFICULTY_MULT = 5;
+
+const CULTIVATE_RATE_ONLINE  = 0.4;   // 在线 0.4 修为/秒（原 1.0）
+const CULTIVATE_RATE_OFFLINE = 0.2;   // 离线 0.2 修为/秒（原 0.4）
 const OFFLINE_CAP_HOURS      = 12;    // 离线结算上限 12 小时
 
 /* ============ 突破基础成功率 ============ */
@@ -266,11 +276,18 @@ function getDongfuTianjishiMult() {
 }
 
 /* ============ 洞府 · 随机奇遇 ============ */
-const DONGFU_EVENT_CHANCE = 0.20;   // 20% 概率触发
+const DONGFU_EVENT_CHANCE = 0.30;   // 30% 概率触发
+/* 稀有度权重（越大越容易出） */
+const DONGFU_RARITY = {
+  common: { n: '常见', color: '#7dd99d', weight: 10 },
+  rare:   { n: '罕见', color: '#c088dd', weight: 5  },
+  epic:   { n: '珍稀', color: '#e6c473', weight: 2  }
+};
 
 const DONGFU_EVENTS = [
   {
     id: 'beggar',
+    rarity: 'common',
     n: '乞丐塞破铜钱',
     ic: '🥺',
     desc: '洞府外，一个老乞丐拦住你，硬塞给你一枚破铜钱。他嘴里念叨着「拿着，会有用的」。',
@@ -294,6 +311,7 @@ const DONGFU_EVENTS = [
   },
   {
     id: 'meteor',
+    rarity: 'epic',
     n: '陨石砸坏炼丹炉',
     ic: '☄️',
     desc: '一颗陨石从天而降，砸烂了你的炼丹炉。炉子里还剩点余烬，旁边散落些碎石。',
@@ -321,6 +339,7 @@ const DONGFU_EVENTS = [
   },
   {
     id: 'yelling',
+    rarity: 'common',
     n: '瓜娃子叫骂',
     ic: '😡',
     desc: '一个瓜娃子站在洞府门口，扯着嗓子骂你，从你师父骂到你家十八代祖宗。',
@@ -342,7 +361,130 @@ const DONGFU_EVENTS = [
         }
       }
     ]
+  },
+  {
+    id: 'wolf',
+    rarity: 'common',
+    n: '野狼堵路',
+    ic: '🐺',
+    desc: '后山小道上一头野狼拦住去路，龇着牙，尾巴炸得老高，口水顺着下巴往下滴。',
+    options: [
+      {
+        text: '抄家伙把它打跑（修为 +3%）',
+        apply: () => {
+          const gain = Math.floor(getExpNeeded(s.realm, s.layer) * 0.03);
+          s.exp += gain;
+          toast('你拾起一根木棍冲上去，狼跑了 · 修为 +' + fmtNum(gain), 2200);
+        }
+      },
+      {
+        text: '绕路走，多一事不如少一事（道韵 +3%）',
+        apply: () => {
+          s.daoyun = Math.min(DAOYUN_CAP, s.daoyun + 0.03);
+          toast('绕了半里路，心里倒是静了 · 道韵 +3%', 2200);
+        }
+      }
+    ]
+  },
+  {
+    id: 'peach',
+    rarity: 'rare',
+    n: '仙桃落地',
+    ic: '🍑',
+    desc: '后山有棵老桃树，一颗熟透的桃子啪的一声落在你脚边，粉嫩嫩的，闻着就甜。',
+    options: [
+      {
+        text: '拾起来吃了（修为 +5%）',
+        apply: () => {
+          const gain = Math.floor(getExpNeeded(s.realm, s.layer) * 0.05);
+          s.exp += gain;
+          toast('咬一口，汁水顺着下巴流 · 修为 +' + fmtNum(gain), 2200);
+        }
+      },
+      {
+        text: '留给山上的鸟吃（道韵 +4%）',
+        apply: () => {
+          s.daoyun = Math.min(DAOYUN_CAP, s.daoyun + 0.04);
+          toast('你扭头走了，身后一群麻雀扑棱棱落下来 · 道韵 +4%', 2600);
+        }
+      }
+    ]
+  },
+  {
+    id: 'oldman',
+    rarity: 'epic',
+    n: '老头借宿',
+    ic: '🧙',
+    desc: '夜里有人敲门，是个白胡子老头，背着个破包袱，说天黑了要借宿一晚。你瞅了他一眼，看不透深浅。',
+    options: [
+      {
+        text: '收留他一晚（天机石 +1）',
+        apply: () => {
+          if(s.tianjishi >= TIANJISHI_CAP){
+            toast('天机石已满，老头留下一句话走了', 2200);
+          } else {
+            s.tianjishi = Math.min(TIANJISHI_CAP, s.tianjishi + 1);
+            toast('老头临走塞给你一块石头 · 💎 +1', 2200);
+          }
+        }
+      },
+      {
+        text: '推说洞府简陋，打发走（修为 +2%）',
+        apply: () => {
+          const gain = Math.floor(getExpNeeded(s.realm, s.layer) * 0.02);
+          s.exp += gain;
+          toast('你关上门接着打坐 · 修为 +' + fmtNum(gain), 2200);
+        }
+      }
+    ]
+  },
+  {
+    id: 'sword',
+    rarity: 'rare',
+    n: '路边残剑',
+    ic: '🗡️',
+    desc: '山坡上斜插着一把锈迹斑斑的剑，剑柄缠的布都烂了，不知道哪年哪月留下的。',
+    options: [
+      {
+        text: '拔出来看看（修为 +3% · 道韵 +1%）',
+        apply: () => {
+          const gain = Math.floor(getExpNeeded(s.realm, s.layer) * 0.03);
+          s.exp += gain;
+          s.daoyun = Math.min(DAOYUN_CAP, s.daoyun + 0.01);
+          toast('剑身锈得不成样子，倒是顺手练了两下 · 修为 +' + fmtNum(gain), 2400);
+        }
+      },
+      {
+        text: '给它培点土，让它继续锈着（道韵 +4%）',
+        apply: () => {
+          s.daoyun = Math.min(DAOYUN_CAP, s.daoyun + 0.04);
+          toast('你捧了几把土盖上去，拍了拍手走了 · 道韵 +4%', 2400);
+        }
+      }
+    ]
+  },
+  {
+    id: 'flood',
+    rarity: 'common',
+    n: '山下涨水',
+    ic: '🌊',
+    desc: '一连下了三天雨，山下那条河涨得跟黄汤似的，村里几个汉子正扛着沙袋往堤上跑。',
+    options: [
+      {
+        text: '脱了外袍下去搭把手（修为 +5%）',
+        apply: () => {
+          const gain = Math.floor(getExpNeeded(s.realm, s.layer) * 0.05);
+          s.exp += gain;
+          toast('你扛了一下午沙袋，腰都直不起来 · 修为 +' + fmtNum(gain), 2600);
+        }
+      },
+      {
+        text: '站岸上看，雨里的水流得挺有章法（道韵 +3%）',
+        apply: () => {
+          s.daoyun = Math.min(DAOYUN_CAP, s.daoyun + 0.03);
+          toast('你蹲在岸边看了一下午水 · 道韵 +3%', 2400);
+        }
+      }
+    ]
   }
 ];
-
-
