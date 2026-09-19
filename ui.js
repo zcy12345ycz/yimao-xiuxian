@@ -381,59 +381,107 @@ async function downloadCloudSave() {
   return true;
 }
 
-function openCloudSave() {
-  let html = '<div class="modal-title">云 端 存 档</div>';
-  html += '<div class="modal-sub">登录后，存档将自动同步到云端</div>';
-  html += '<div class="field-label">邮箱</div>';
-  html += '<input class="name-input" id="cloudEmail" type="email" placeholder="you@example.com" style="width:100%;margin-bottom:10px">';
-  html += '<div class="field-label">密码</div>';
-  html += '<input class="name-input" id="cloudPassword" type="password" placeholder="至少 8 位，含大写、小写、数字" style="width:100%;margin-bottom:20px">';
-  html += '<button class="btn gold" style="width:100%;padding:15px" id="cloudLoginBtn">登 录</button>';
-  html += '<button class="btn" style="width:100%;margin-top:8px;padding:15px" id="cloudSignUpBtn">注 册 新 账 号</button>';
-  html += '<button class="btn realm" style="width:100%;margin-top:8px;padding:15px" id="cloudDownloadBtn">⬇ 从云端下载存档</button>';
-  html += '<div class="watermark wm-modal">' + GAME_AUTHOR + '</div>';
-  
-  showModal(html);
-  
-  $('cloudLoginBtn').onclick = async (e) => {
-    e.stopPropagation();
-    AudioSys.click();
-    const email = $('cloudEmail').value.trim();
-    const password = $('cloudPassword').value;
-    if (!email || !password) { toast('请输入邮箱和密码'); return; }
-    if (!supabaseClient) { toast('云端未连接，请检查配置'); return; }
-    
-    toast('正在登录...', 2000);
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) { toast('登录失败：' + error.message, 3000); return; }
-    toast('登录成功！');
-    const ok = await uploadCloudSave();
-    if (ok) { toast('✅ 存档已上传云端！', 3000); }
-    else { toast('登录成功，但存档上传失败', 3000); }
-    hideModal();
-  };
-  
-  $('cloudSignUpBtn').onclick = async (e) => {
-    e.stopPropagation();
-    AudioSys.click();
-    const email = $('cloudEmail').value.trim();
-    const password = $('cloudPassword').value;
-    if (!email || !password) { toast('请输入邮箱和密码'); return; }
-    if (!supabaseClient) { toast('云端未连接，请检查配置'); return; }
-    
-    toast('正在注册...', 2000);
-    const { data, error } = await supabaseClient.auth.signUp({ email, password });
-    if (error) { toast('注册失败：' + error.message, 3000); return; }
-    toast('注册成功！请去邮箱收信验证，或直接登录。');
-  };
-  $('cloudDownloadBtn').onclick = async (e) => {
-    e.stopPropagation();
-    AudioSys.click();
-    const ok = await downloadCloudSave();
-    if (ok) { toast('✅ 云端存档已恢复！', 3000); hideModal(); }
-  };
-}
+async function openCloudSave() {
+  if (!supabaseClient) { toast('云端未连接，请检查网络或刷新页面'); return; }
 
+  let html = '<div class="modal-title">云 端 存 档</div>';
+
+  try {
+    // 先获取当前登录状态
+    const { data: { user } } = await supabaseClient.auth.getUser();
+
+    if (user) {
+      // ============ 已登录状态 ============
+      html += '<div class="modal-sub">当前已登录：<span class="hl">' + user.email + '</span></div>';
+      html += '<div class="tip-box good" style="text-align:center;margin:14px 0">登录状态已自动保存，下次打开无需再次输入密码。</div>';
+      html += '<button class="btn gold" style="width:100%;padding:15px;margin-bottom:10px" id="cloudUploadBtn">☁️ 立即上传存档</button>';
+      html += '<button class="btn realm" style="width:100%;padding:15px;margin-bottom:10px" id="cloudDownloadBtn">⬇️ 从云端下载存档</button>';
+      html += '<button class="btn" style="width:100%;padding:15px;border-color:var(--red);color:var(--red)" id="cloudLogoutBtn">退 出 登 录</button>';
+    } else {
+      // ============ 未登录状态 ============
+      html += '<div class="modal-sub">登录后，存档将自动同步到云端</div>';
+      html += '<div class="field-label">邮箱</div>';
+      html += '<input class="name-input" id="cloudEmail" type="email" placeholder="you@example.com" style="width:100%;margin-bottom:10px">';
+      html += '<div class="field-label">密码</div>';
+      html += '<input class="name-input" id="cloudPassword" type="password" placeholder="至少 8 位" style="width:100%;margin-bottom:20px">';
+      html += '<button class="btn gold" style="width:100%;padding:15px" id="cloudLoginBtn">登 录</button>';
+      html += '<button class="btn" style="width:100%;margin-top:8px;padding:15px" id="cloudSignUpBtn">注 册 新 账 号</button>';
+    }
+  } catch(e) {
+    console.error('获取用户状态失败:', e);
+    html += '<div class="tip-box warn">网络异常，请检查网络后重试</div>';
+  }
+
+  html += '<div class="watermark wm-modal">' + GAME_AUTHOR + '</div>';
+  showModal(html);
+
+  // ============ 绑定事件 ============
+  if ($('cloudUploadBtn')) {
+    $('cloudUploadBtn').onclick = async (e) => {
+      e.stopPropagation();
+      AudioSys.click();
+      toast('正在上传...', 2000);
+      const ok = await uploadCloudSave();
+      if (ok) toast('✅ 存档已上传云端！', 3000);
+      else toast('上传失败，请重试', 3000);
+      hideModal();
+    };
+  }
+
+  if ($('cloudDownloadBtn')) {
+    $('cloudDownloadBtn').onclick = async (e) => {
+      e.stopPropagation();
+      AudioSys.click();
+      const ok = await downloadCloudSave();
+      if (ok) { toast('✅ 云端存档已恢复！', 3000); hideModal(); }
+    };
+  }
+
+  if ($('cloudLogoutBtn')) {
+    $('cloudLogoutBtn').onclick = async (e) => {
+      e.stopPropagation();
+      AudioSys.click();
+      if (!confirm('确定退出登录吗？退出后自动上传将暂停。')) return;
+      await supabaseClient.auth.signOut();
+      toast('已退出登录');
+      openCloudSave(); // 刷新弹窗状态
+    };
+  }
+
+  if ($('cloudLoginBtn')) {
+    $('cloudLoginBtn').onclick = async (e) => {
+      e.stopPropagation();
+      AudioSys.click();
+      const email = $('cloudEmail').value.trim();
+      const password = $('cloudPassword').value;
+      if (!email || !password) { toast('请输入邮箱和密码'); return; }
+      
+      toast('正在登录...', 2000);
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) { toast('登录失败：' + error.message, 3000); return; }
+      
+      toast('登录成功！存档将自动同步。');
+      const ok = await uploadCloudSave();
+      if (ok) toast('✅ 当前存档已同步到云端！', 3000);
+      openCloudSave(); // 刷新弹窗状态
+    };
+  }
+
+  if ($('cloudSignUpBtn')) {
+    $('cloudSignUpBtn').onclick = async (e) => {
+      e.stopPropagation();
+      AudioSys.click();
+      const email = $('cloudEmail').value.trim();
+      const password = $('cloudPassword').value;
+      if (!email || !password) { toast('请输入邮箱和密码'); return; }
+      
+      toast('正在注册...', 2000);
+      const { data, error } = await supabaseClient.auth.signUp({ email, password });
+      if (error) { toast('注册失败：' + error.message, 3000); return; }
+      toast('注册成功！请去邮箱验证，或直接尝试登录。');
+    };
+  }
+}
 /* ============ 主界面点击吐槽逻辑 ============ */
 (function initBgClick(){
   let clickCount = 0;

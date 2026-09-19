@@ -24,7 +24,7 @@ const _ICON={
 
 /* ============ 方言 ============ */
 const TX={
-  splash_story:{std:'六岁那年，你算了一笔账：<br>中国有14亿人，如果每人给你一毛钱……<br><span class="hl">你就有14亿毛。</span><span class="pause"></span>你兴奋得一夜没睡。<span class="pause"></span>后来你长大了，发现没有人会给你一毛钱。<span class="pause"></span>于是你决定修仙，<br>并立下大志：<span class="hl">培养出能收齐14亿毛的弟子。</span>',sc:'六岁那年，你算了一笔账：<br>中国有14亿人，要是每人给你一毛钱……<br><span class="hl">你就成14亿毛咯。</span><span class="pause"></span>你兴奋得一夜没睡。<span class="pause"></span>后来你长大了，才晓得没得哪个会给你一毛钱。<span class="pause"></span>于是你决定修仙，<br>并立下大志：<span class="hl">培养出能收齐14亿毛的弟子。</span>'},
+splash_story:{std:'六岁那年，你算了一笔账：<br>中国有14亿人，要是每人给你一毛钱……<br><span class="hl">你就成14亿毛咯。</span><span class="pause"></span>你兴奋得一夜没睡。<span class="pause"></span>后来你长大了，才晓得没得哪个会给你一毛钱。<span class="pause"></span>于是你决定修仙，<br>不图别的，就图个自己搞钱自己花。<br>并立下大志：<span class="hl">老子一个人，也要在红尘里搞到14亿毛！</span>',sc:'六岁那年，你算了一笔账：<br>中国有14亿人，要是每人给你一毛钱……<br><span class="hl">你就成14亿毛咯。</span><span class="pause"></span>你兴奋得一夜没睡。<span class="pause"></span>后来你长大了，才晓得没得哪个会给你一毛钱。<span class="pause"></span>于是你决定修仙，<br>不图别的，就图个自己搞钱自己花。<br>并立下大志：<span class="hl">老子一个人，也要在红尘里搞到14亿毛！</span>'},
   first_meet_1:{std:'一个年轻人站在山门前，手里捧着一枚铜钱。',sc:'一个年轻人站到山门前，手头捧到一枚铜钱。'},
   first_meet_2:{std:'「掌门，弟子只有一毛，请掌门收下。」',sc:'「掌门，弟子只有一毛，请掌门收下。」'},
   master_reply_1:{std:'入我门来，便是一家人。',sc:'进门就是一家人咯。'},

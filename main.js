@@ -10,7 +10,13 @@ function initSupabase() {
     return false;
   }
   try {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,      // 自动保存登录状态到本地
+    autoRefreshToken: true,    // 自动刷新令牌，避免过期掉线
+    detectSessionInUrl: true   // 自动检测地址栏中的登录回调
+  }
+});
     console.log('✅ Supabase 已连接');
     return true;
   } catch(e) {
@@ -391,7 +397,10 @@ function init(){
     el.splash.style.display='none';el.create.style.display='none';el.game.classList.add('show');
     renderUI();spawnParticles();
     lastSaveT=Date.now();lastUIT=Date.now();lastCultivateT=Date.now();
-    setTimeout(() => checkCloudUpdate(), 3500);
+    setTimeout(() => {
+      if (typeof initSupabase === 'function') initSupabase();
+      checkCloudUpdate();
+    }, 3500);
     // 每日仙缘提示（如果今天还没用过、也没提示过）
     if(s.xianyuanDate!==todayDateStr() && s.xianyuanNotified!==todayDateStr()){
       s.xianyuanNotified=todayDateStr();
