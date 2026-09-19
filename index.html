@@ -22,16 +22,16 @@ var _hmt = _hmt || [];
 </script>
 </head>
 <body>
-<audio id="bgm" src="bgm.mp3" preload="auto"></audio>
+<audio id="bgm" preload="auto"></audio>
 
 <div class="screen" id="splash">
   <div class="splash-glow"></div>
-  <div class="splash-coin">🪙</div>
+  <div class="splash-coin"><svg viewBox="0 0 24 24" width="76" height="76" fill="none" stroke="var(--gold)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><rect x="9.5" y="9.5" width="5" height="5"/></svg></div>
   <div class="splash-title">一毛修仙</div>
   <div class="splash-sub">ALL FOR ONE MAO</div>
   <div class="splash-story" id="splashStory">六岁那年，你算了一笔账：<br>中国有14亿人，如果每人给你一毛钱……<br><span class="hl">你就有14亿毛。</span><span class="pause"></span>你兴奋得一夜没睡。<span class="pause"></span>后来你长大了，发现没有人会给你一毛钱。<span class="pause"></span>于是你决定修仙，<br>并立下大志：<span class="hl">培养出能收齐14亿毛的弟子。</span></div>
   <button class="create-confirm" id="startBtn" style="max-width:340px">踏 入 道 途</button>
-  <div class="splash-version" id="splashVersion">v1.7 · Zhao | Struct. E.</div>
+  <div class="splash-version" id="splashVersion"></div>
   <div class="splash-author">by <span class="hl">Zhao | Struct. E.</span> · 一级注册结构工程师 · 完全不懂代码 · 全靠 AI 做出来的游戏</div>
 </div>
 
@@ -42,460 +42,134 @@ var _hmt = _hmt || [];
     <div class="field-label">掌 门 道 号</div>
     <div class="name-row">
       <input class="name-input" id="nameInput" placeholder="无名掌门" maxlength="12">
-      <button class="random-btn" id="randomNameBtn">🎲</button>
+      <button class="random-btn" id="randomNameBtn"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--dim)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="9" cy="15" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="12" cy="12" r="1"/></svg></button>
     </div>
     <button class="create-confirm" id="createConfirm" disabled>开 宗 立 派</button>
     <div class="import-divider">已 有 存 档</div>
-    <button class="import-link" id="importFromCreate">📥 导 入 存 档</button>
-    <div class="watermark wm-modal" style="border-top:none;padding-top:14px;opacity:.4" id="createVersion">by Zhao | Struct. E. · v1.7</div>
+    <button class="import-link" id="importFromCreate"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>导 入 存 档</button>
+    <div class="watermark wm-modal" style="border-top:none;padding-top:14px;opacity:.4" id="createVersion"></div>
   </div>
 </div>
 
 <div id="game">
+<!-- 霸气水墨飞龙 -->
+<!-- 霸气水墨飞龙 -->
+<div class="dragon-wrap" id="dragonWrap">
+  <!-- 龙身灵气光晕 -->
+  <div class="dragon-aura"></div>
+  
+  <svg viewBox="0 0 400 150" class="dragon-svg">
+    <defs>
+      <linearGradient id="dragonGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="rgba(230,196,115,0)" />
+        <stop offset="30%" stop-color="rgba(230,196,115,0.6)" />
+        <stop offset="70%" stop-color="rgba(230,196,115,0.9)" />
+        <stop offset="100%" stop-color="rgba(230,196,115,0.2)" />
+      </linearGradient>
+      <!-- 龙眼发光滤镜 -->
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+        <feMerge>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+    </defs>
+    
+    <!-- 龙身 -->
+    <path d="M 20 100 C 80 20, 160 20, 220 80 C 260 120, 320 120, 380 80" fill="none" stroke="url(#dragonGrad)" stroke-width="3" stroke-linecap="round"/>
+    
+    <!-- 龙角与龙须 -->
+    <path d="M 20 100 Q 5 80 0 60 M 20 100 Q 15 70 30 50" fill="none" stroke="rgba(230,196,115,0.8)" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- 龙眼（高亮闪烁） -->
+    <circle cx="18" cy="95" r="2.5" fill="#fff" class="dragon-eye" filter="url(#glow)"/>
+    
+    <!-- 龙爪 -->
+    <path d="M 120 50 Q 140 30 150 15 M 120 50 Q 140 45 160 40" fill="none" stroke="rgba(230,196,115,0.6)" stroke-width="2" stroke-linecap="round"/>
+    <path d="M 260 105 Q 280 125 290 140 M 260 105 Q 280 115 300 115" fill="none" stroke="rgba(230,196,115,0.6)" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- 龙尾 -->
+    <path d="M 380 80 Q 390 70 395 75 M 380 80 Q 395 85 390 95" fill="none" stroke="rgba(230,196,115,0.5)" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- 飘散的金色灵气粒子 -->
+    <circle cx="40" cy="90" r="1.5" fill="#e6c473" class="dragon-particle p1"/>
+    <circle cx="150" cy="40" r="2" fill="#e6c473" class="dragon-particle p2"/>
+    <circle cx="280" cy="110" r="1.5" fill="#e6c473" class="dragon-particle p3"/>
+    <circle cx="360" cy="70" r="2" fill="#e6c473" class="dragon-particle p4"/>
+  </svg>
+</div>
 <div class="watermark" id="gameWatermark">Zhao | Struct. E.</div>
-  <button class="recruit-fab" id="recruitFab" title="收徒">🧑</button>
-  <button class="donate-fab" id="donateFab" title="赏我一毛">🪙</button>
-  <div class="tianxia" id="tianxiaBox"></div>
+<button class="recruit-fab" id="gufengFab" title="红尘历练" style="top: calc(50% - 56px)"><span>📜</span></button>\n <button class="donate-fab" id="donateFab" title="赏我一毛"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><rect x="9.5" y="9.5" width="5" height="5"/></svg></button>
   <div class="tianxiang-banner" id="tianxiangBanner"></div>
 
   <div class="menu-wrap">
-    <button class="icon-btn" id="signInQuickBtn" title="每日签到">📅<span class="dot-badge" id="signInQuickDot" style="display:none"></span></button>
-    <button class="icon-btn" id="memoQuickBtn" title="批阅奏章">📜<span class="num-badge" id="memoQuickDot" style="display:none">0</span></button>
-    <button class="icon-btn" id="soundQuickBtn" title="声音">🔊</button>
-     <button class="icon-btn" id="menuBtn">☰</button>
-    <button class="icon-btn" id="helpQuickBtn" title="玩法说明">❓</button>
+    <button class="icon-btn" id="soundQuickBtn" title="声音"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--realm)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 5.5a9 9 0 010 13"/></svg></button>
+     <button class="icon-btn" id="menuBtn"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--realm)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></button>
+    <button class="icon-btn" id="helpQuickBtn" title="玩法说明"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--realm)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 015 .5c0 1.5-2.5 2-2.5 3.5"/><path d="M12 17h.01"/></svg></button>
                 <div class="menu-pop" id="menuPop">
       <div class="menu-item" id="menuSave"><span class="mi-icon">💾</span>存档管理</div>
+      <div class="menu-item" id="menuCloud"><span class="mi-icon">☁️</span>云端存档</div>
       <div class="menu-item" id="menuSettings"><span class="mi-icon">⚙️</span>设置</div>
+      <div class="menu-item" id="menuInstall"><span class="mi-icon">📲</span>添加到桌面</div>
+      <div class="menu-item" id="menuPowerSave"><span class="mi-icon">⚡</span>省电模式<span class="menu-badge done" id="powerSaveBadge" style="display:none">开</span></div>
     </div>
   </div>
 
   <header class="hud-top">
-    <div class="master-label">掌 门</div>
-    <div><span class="player-name" id="playerName">无名掌门</span><span class="title-tag" id="masterTitle" style="display:none"></span></div>
-    <div class="sect-line">
-      <span>宗门</span>
-      <span class="sv" id="sectName">一毛宗</span>
-      <span class="sep">·</span>
-      <span>弟子 <span class="sv" id="discipleCount">1</span> 人</span>
-      <span class="sep">·</span>
-      <span>第 <span class="sv" id="eraNum">1</span> 纪</span>
-      <span class="sep">·</span><span>立派 <span class="sv" id="playDays">1</span> 天</span>
+    <div class="player-name-row"><span class="player-name" id="playerName">无名掌门</span></div>
+    <div class="realm-display">
+      <div class="realm-name" id="realmName">练气 1 层</div>
+      <div class="exp-bar-outer">
+        <div class="exp-bar-fill" id="expBarFill"></div>
+        <div class="exp-bar-text" id="expBarText">0 / 1,800</div>
+      </div>
+      <div class="exp-meta-row">
+        <div class="exp-rate" id="expRate">+1.0 修为/秒</div>
+        <div class="tianjishi-display" id="tianjishiDisplay">
+          <span class="tj-icon">💎</span>
+          <span class="tj-count" id="tianjishiCount">0</span>
+        </div>
+      </div>
     </div>
   </header>
 
-  <main class="stage">
+    <main class="stage">
     <div class="scene">
-      <!-- 天光 -->
-      <div class="sky-glow"></div>      
-      <!-- 月轮 -->
+      <div class="sky-glow"></div>
       <div class="moon"></div>
-      <!-- 星屑 -->
       <div class="stars" id="stars"></div>
-
-      <!-- 远景山 -->
-      <div class="mountains-far">
-        <svg viewBox="0 0 400 120" preserveAspectRatio="none">
-          <path d="M0,120 L0,85 Q30,55 60,75 Q90,45 130,70 Q170,40 210,65 Q250,45 290,70 Q330,55 370,80 Q385,72 400,85 L400,120 Z" fill="rgba(122,184,196,.07)"/>
-          <path d="M0,120 L0,100 Q50,78 100,95 Q150,75 200,92 Q250,78 300,95 Q350,85 400,98 L400,120 Z" fill="rgba(122,184,196,.05)"/>
-        </svg>
-      </div>
-
-      <!-- 悬浮岛屿 -->
-      <div class="floating-isles">
-        <svg class="isle isle-1" viewBox="0 0 60 30">
-          <path d="M8,18 Q14,10 30,12 Q46,10 52,18 L46,24 Q30,28 14,24 Z" fill="rgba(30,55,48,.65)"/>
-          <ellipse cx="30" cy="12" rx="18" ry="2.4" fill="rgba(122,184,196,.15)"/>
-          <path d="M22,12 L26,4 L30,12 M30,12 L34,6 L38,12" stroke="rgba(42,72,65,.8)" stroke-width=".8" fill="none"/>
-        </svg>
-        <svg class="isle isle-2" viewBox="0 0 60 30">
-          <path d="M10,20 Q16,12 30,14 Q44,12 50,20 L44,26 Q30,30 16,26 Z" fill="rgba(30,55,48,.55)"/>
-          <ellipse cx="30" cy="14" rx="16" ry="2" fill="rgba(122,184,196,.12)"/>
-        </svg>
-        <svg class="isle isle-3" viewBox="0 0 60 30">
-          <path d="M12,18 Q18,10 30,12 Q42,10 48,18 L42,24 Q30,28 18,24 Z" fill="rgba(30,55,48,.4)"/>
-          <ellipse cx="30" cy="12" rx="14" ry="1.8" fill="rgba(122,184,196,.1)"/>
-        </svg>
-      </div>
-
-      <!-- 云海一层 -->
-      <div class="cloud-sea cloud-1"></div>
-
-      <!-- 主山脉 -->
-      <div class="mountains-mid">
-        <svg viewBox="0 0 400 200" preserveAspectRatio="none">
-          <!-- 左峰 -->
-          <path d="M0,200 L0,110 Q25,80 45,95 Q65,62 90,88 Q112,68 132,95 Q152,82 170,108 L180,200 Z" fill="rgba(42,72,65,.75)"/>
-          <!-- 右峰 -->
-          <path d="M400,200 L400,100 Q380,72 358,90 Q338,58 313,84 Q293,64 273,95 Q253,82 232,108 L222,200 Z" fill="rgba(42,72,65,.75)"/>
-          <!-- 山脊高光 -->
-          <path d="M0,110 Q25,80 45,95 Q65,62 90,88 Q112,68 132,95" stroke="rgba(122,184,196,.35)" stroke-width="1" fill="none"/>
-          <path d="M400,100 Q380,72 358,90 Q338,58 313,84 Q293,64 273,95" stroke="rgba(122,184,196,.35)" stroke-width="1" fill="none"/>
-        </svg>
-      </div>
-
-      <!-- 云海二层 -->
-      <div class="cloud-sea cloud-2"></div>
-
-      <!-- 宗门建筑 -->
-      <div class="sect-base">
-        <svg viewBox="0 0 400 200" preserveAspectRatio="none">
-          <!-- 山门平台 -->
-          <ellipse cx="200" cy="165" rx="95" ry="8" fill="rgba(122,184,196,.12)"/>
-          <ellipse cx="200" cy="165" rx="60" ry="4" fill="rgba(122,184,196,.08)"/>
-
-          <!-- 主殿飞檐 -->
-          <path d="M140,120 Q145,113 152,112 Q200,92 248,112 Q255,113 260,120 Q255,117 248,118 Q200,98 152,118 Q145,117 140,120 Z" fill="rgba(23,42,36,.98)" stroke="rgba(230,196,115,.7)" stroke-width=".8"/>
-          <!-- 主殿主体 -->
-          <path d="M148,122 L252,122 L250,152 L150,152 Z" fill="rgba(23,42,36,.9)" stroke="rgba(230,196,115,.4)" stroke-width=".8"/>
-          <!-- 主殿檐下金线 -->
-          <line x1="150" y1="124" x2="250" y2="124" stroke="rgba(230,196,115,.5)" stroke-width=".6"/>
-          <!-- 主殿门 -->
-          <rect x="188" y="130" width="24" height="22" fill="rgba(230,196,115,.45)" stroke="rgba(230,196,115,.7)" stroke-width=".4"/>
-          <line x1="200" y1="130" x2="200" y2="152" stroke="rgba(230,196,115,.7)" stroke-width=".4"/>
-
-          <!-- 左配殿 -->
-          <path d="M88,136 Q92,131 98,130 Q110,120 122,130 Q128,131 132,136 Q128,134 122,135 Q110,126 98,135 Q92,134 88,136 Z" fill="rgba(23,42,36,.95)" stroke="rgba(230,196,115,.5)" stroke-width=".6"/>
-          <rect x="92" y="136" width="36" height="20" fill="rgba(23,42,36,.82)" stroke="rgba(122,184,196,.35)" stroke-width=".6"/>
-
-          <!-- 右配殿 -->
-          <path d="M268,136 Q272,131 278,130 Q290,120 302,130 Q308,131 312,136 Q308,134 302,135 Q290,126 278,135 Q272,134 268,136 Z" fill="rgba(23,42,36,.95)" stroke="rgba(230,196,115,.5)" stroke-width=".6"/>
-          <rect x="272" y="136" width="36" height="20" fill="rgba(23,42,36,.82)" stroke="rgba(122,184,196,.35)" stroke-width=".6"/>
-
-          <!-- 灯笼 -->
-          <circle cx="142" cy="124" r="2.4" fill="rgba(230,196,115,.95)">
-            <animate attributeName="opacity" values=".55;1;.55" dur="2.4s" repeatCount="indefinite"/>
-          </circle>
-          <circle cx="258" cy="124" r="2.4" fill="rgba(230,196,115,.95)">
-            <animate attributeName="opacity" values=".55;1;.55" dur="2.4s" repeatCount="indefinite" begin="1.2s"/>
-          </circle>
-
-          <!-- 石阶 -->
-          <path d="M182,152 L218,152 L228,168 L172,168 Z" fill="rgba(122,184,196,.1)" stroke="rgba(122,184,196,.3)" stroke-width=".5"/>
-          <line x1="178" y1="158" x2="222" y2="158" stroke="rgba(122,184,196,.2)" stroke-width=".4"/>
-          <line x1="175" y1="163" x2="225" y2="163" stroke="rgba(122,184,196,.2)" stroke-width=".4"/>
-
-          <!-- 左侧松树 -->
-          <path d="M68,156 L73,142 L71,142 L76,128 L74,128 L80,112 L86,128 L84,128 L89,142 L87,142 L92,156 Z" fill="rgba(20,38,32,.95)"/>
-          <path d="M42,158 L46,148 L44,148 L48,137 L46,137 L51,126 L55,137 L53,137 L57,148 L55,148 L59,158 Z" fill="rgba(20,38,32,.85)"/>
-
-          <!-- 右侧松树 -->
-          <path d="M320,158 L324,145 L322,145 L326,132 L324,132 L330,118 L336,132 L334,132 L338,145 L336,145 L340,158 Z" fill="rgba(20,38,32,.95)"/>
-          <path d="M344,160 L347,150 L345,150 L349,141 L347,141 L352,130 L357,141 L355,141 L359,150 L357,150 L360,160 Z" fill="rgba(20,38,32,.85)"/>
-        
-          <!-- 宗幡 -->
-          <line x1="120" y1="152" x2="120" y2="104" stroke="rgba(122,184,196,.5)" stroke-width=".7"/>
-          <path d="M120,106 L134,110 L120,116 L134,122 L120,128 Z" fill="rgba(230,196,115,.7)" stroke="rgba(230,196,115,.9)" stroke-width=".4">
-            <animate attributeName="d" values="M120,106 L134,110 L120,116 L134,122 L120,128 Z;M120,106 L132,111 L120,117 L132,123 L120,128 Z;M120,106 L134,110 L120,116 L134,122 L120,128 Z" dur="3s" repeatCount="indefinite"/>
-          </path>
-          <line x1="280" y1="152" x2="280" y2="104" stroke="rgba(122,184,196,.5)" stroke-width=".7"/>
-          <path d="M280,106 L294,110 L280,116 L294,122 L280,128 Z" fill="rgba(230,196,115,.7)" stroke="rgba(230,196,115,.9)" stroke-width=".4">
-            <animate attributeName="d" values="M280,106 L294,110 L280,116 L294,122 L280,128 Z;M280,106 L292,111 L280,117 L292,123 L280,128 Z;M280,106 L294,110 L280,116 L294,122 L280,128 Z" dur="3.4s" repeatCount="indefinite"/>
-          </path>
-        </svg>
-      </div>
-
-      <!-- 云海三层 -->
-      <div class="cloud-sea cloud-3"></div>
-
-      <!-- 漂浮符文 -->
-      <div class="runes">
-        <span class="rune" style="left:12%;top:22%;animation-delay:0s">道</span>
-        <span class="rune" style="left:84%;top:30%;animation-delay:2.4s">静</span>
-        <span class="rune" style="left:22%;top:56%;animation-delay:4.1s">虚</span>
-        <span class="rune" style="left:76%;top:62%;animation-delay:1.5s">无</span>
-      </div>
-
-      <!-- 近景山石剪影 -->
-      <div class="foreground">
-        <svg viewBox="0 0 400 80" preserveAspectRatio="none">
-          <path d="M0,80 L0,58 Q30,48 60,62 Q90,52 130,68 Q170,58 210,72 Q250,60 290,70 Q330,60 370,74 Q385,70 400,74 L400,80 Z" fill="rgba(12,24,20,.9)"/>
-        </svg>
-      </div>
-
       <div class="fog"></div>
       <div class="particles" id="particles"></div>
-
-      <!-- 仙鹤 -->
-      <div class="cranes">
-        <div class="crane c1">
-          <svg viewBox="0 0 48 20" fill="none" stroke="rgba(232,238,240,.85)" stroke-width="1.3" stroke-linecap="round">
-            <path d="M2,14 Q14,2 24,11"/>
-            <path d="M24,11 Q34,2 46,14"/>
-            <path d="M22,11 L24,3 L26,11"/>
-          </svg>
-        </div>
-        <div class="crane c2">
-          <svg viewBox="0 0 48 20" fill="none" stroke="rgba(232,238,240,.7)" stroke-width="1.2" stroke-linecap="round">
-            <path d="M2,14 Q14,2 24,11"/>
-            <path d="M24,11 Q34,2 46,14"/>
-            <path d="M22,11 L24,3 L26,11"/>
-          </svg>
-        </div>
-        <div class="crane c3">
-          <svg viewBox="0 0 48 20" fill="none" stroke="rgba(232,238,240,.55)" stroke-width="1.1" stroke-linecap="round">
-            <path d="M2,14 Q14,2 24,11"/>
-            <path d="M24,11 Q34,2 46,14"/>
-            <path d="M22,11 L24,3 L26,11"/>
-          </svg>
-        </div>
-      </div>
-
-      <!-- 莲台 -->
-      <div class="lotus-base">
-        <svg viewBox="0 0 160 40">
-          <ellipse cx="80" cy="34" rx="70" ry="6" fill="rgba(122,184,196,.1)"/>
-          <path d="M80,32 Q40,26 30,14 Q56,20 80,26 Q104,20 130,14 Q120,26 80,32 Z" fill="rgba(230,196,115,.25)" stroke="rgba(230,196,115,.55)" stroke-width=".7"/>
-          <path d="M80,32 Q56,24 52,8 Q66,18 80,24 Q94,18 108,8 Q104,24 80,32 Z" fill="rgba(230,196,115,.35)" stroke="rgba(230,196,115,.7)" stroke-width=".7"/>
-          <ellipse cx="80" cy="28" rx="22" ry="3" fill="rgba(230,196,115,.4)"/>
-        </svg>
-      </div>
-
-      <!-- 灵气飘带 -->
-      <div class="ribbon-wrap">
-        <div class="ribbon r1"></div>
-        <div class="ribbon r2"></div>
-      </div>
-
-      <div class="char-area" id="charArea">
-        <div class="halo"></div>
-        <div class="beam"></div>
-        <svg class="char-svg" id="charSvg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <radialGradient id="haloGrad" cx="50%" cy="50%" r="50%">
-      <stop offset="0%"   stop-color="rgba(122,184,196,.35)"/>
-      <stop offset="55%"  stop-color="rgba(122,184,196,.10)"/>
-      <stop offset="100%" stop-color="rgba(122,184,196,0)"/>
-    </radialGradient>
-    <linearGradient id="robeGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="rgba(72,118,102,1)"/>
-      <stop offset="100%" stop-color="rgba(38,68,58,1)"/>
-    </linearGradient>
-    </linearGradient>
-    <linearGradient id="sleeveGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="rgba(62,102,88,1)"/>
-      <stop offset="100%" stop-color="rgba(30,54,46,1)"/>
-    </linearGradient>
-  </defs>
-
-  <!-- 身后灵气光晕 -->
-  <ellipse cx="100" cy="120" rx="92" ry="105" fill="url(#haloGrad)" opacity=".7"/>
-
-  <!-- 莲台底座 -->
-  <ellipse cx="100" cy="222" rx="72" ry="6" fill="rgba(122,184,196,.18)"/>
-  <path d="M32,218 Q50,229 100,229 Q150,229 168,218 Q150,213 100,213 Q50,213 32,218 Z"
-        fill="rgba(230,196,115,.14)" stroke="rgba(230,196,115,.4)" stroke-width=".8"/>
-
-  <!-- 身后飘带（左） -->
-  <g class="ribbon-l">
-    <path d="M80,88 Q60,138 66,188 Q70,206 58,216"
-          fill="none" stroke="rgba(230,196,115,.5)" stroke-width="1.4" stroke-linecap="round"/>
-  </g>
-  <!-- 身后飘带（右） -->
-  <g class="ribbon-r">
-    <path d="M120,88 Q140,138 134,188 Q130,206 142,216"
-          fill="none" stroke="rgba(230,196,115,.5)" stroke-width="1.4" stroke-linecap="round"/>
-  </g>
-
-  <!-- 盘坐的腿（自然下垂衣摆） -->
-  <path d="M60,175 
-           Q30,190 35,215 
-           C 55,225 75,218 100,225 
-           C 125,218 145,225 165,215 
-           Q170,190 140,175 
-           Q100,190 60,175 Z"
-        fill="url(#robeGrad)" stroke="rgba(140,200,210,.7)" stroke-width="1.1"/>
-
-  <!-- 衣摆内部褶皱细节（增加层次感） -->
-  <path d="M60,200 Q80,210 100,205" stroke="rgba(122,184,196,.3)" stroke-width="0.8" fill="none"/>
-  <path d="M100,205 Q120,210 140,200" stroke="rgba(122,184,196,.3)" stroke-width="0.8" fill="none"/>
-  <path d="M80,215 Q100,218 120,215" stroke="rgba(122,184,196,.2)" stroke-width="0.8" fill="none"/>
-
-  <!-- 交叠的足部细节 -->
-  <path d="M74,200 Q88,208 100,208 Q112,208 126,200 Q116,210 100,210 Q84,210 74,200 Z"
-        fill="rgba(22,40,34,1)" stroke="rgba(230,196,115,.28)" stroke-width=".6"/>
-
-  <!-- 道袍主体 -->
-  <path d="M72,80 Q58,112 56,152 Q52,188 62,206 Q80,214 100,214 Q120,214 138,206
-           Q148,188 144,152 Q142,112 128,80 Q114,72 100,72 Q86,72 72,80 Z"
-        fill="url(#robeGrad)" stroke="rgba(122,184,196,.55)" stroke-width="1.2"/>
-
-  <!-- 对襟中线 -->
-  <path d="M100,80 L100,208" stroke="rgba(122,184,196,.28)" stroke-width=".8" fill="none"/>
-
-  <!-- 领口 -->
-  <path d="M82,82 Q100,96 118,82 Q110,90 100,92 Q90,90 82,82 Z"
-        fill="rgba(20,38,32,.9)" stroke="rgba(230,196,115,.45)" stroke-width=".7"/>
-
-  <!-- 左袖 -->
-  <path d="M72,90 Q56,122 60,158 Q64,172 54,180 Q70,176 78,158 Q84,128 84,102 Z"
-        fill="url(#sleeveGrad)" stroke="rgba(122,184,196,.4)" stroke-width=".9"/>
-  <!-- 右袖 -->
-  <path d="M128,90 Q144,122 140,158 Q136,172 146,180 Q130,176 122,158 Q116,128 116,102 Z"
-        fill="url(#sleeveGrad)" stroke="rgba(122,184,196,.4)" stroke-width=".9"/>
-
-  <!-- 结印的手 -->
-  <ellipse cx="100" cy="155" rx="22" ry="9"
-           fill="rgba(48,84,72,1)" stroke="rgba(122,184,196,.55)" stroke-width=".9"/>
-  <path d="M82,155 Q100,149 118,155" stroke="rgba(230,196,115,.35)" stroke-width=".6" fill="none"/>
-  <path d="M86,159 Q100,155 114,159" stroke="rgba(230,196,115,.35)" stroke-width=".6" fill="none"/>
-
-  <!-- 丹田金丹 -->
-  <circle cx="100" cy="155" r="5" fill="rgba(230,196,115,.95)" opacity=".85">
-    <animate attributeName="opacity" values=".45;.95;.45" dur="3s" repeatCount="indefinite"/>
-  </circle>
-  <circle cx="100" cy="155" r="10" fill="none" stroke="rgba(230,196,115,.55)" stroke-width=".8" opacity=".5">
-    <animate attributeName="r" values="8;15;8" dur="3s" repeatCount="indefinite"/>
-  </circle>
-
-  <!-- 脖颈 -->
-  <path d="M92,66 Q100,71 108,66 L108,78 Q100,82 92,78 Z" fill="rgba(48,84,72,1)"/>
-
-  <!-- 头 -->
-  <ellipse cx="100" cy="50" rx="20" ry="23"
-           fill="rgba(56,96,82,1)" stroke="rgba(122,184,196,.65)" stroke-width="1"/>
-
-  <!-- 发髻 -->
-  <path d="M82,36 Q88,18 100,16 Q112,18 118,36 Q110,28 100,28 Q90,28 82,36 Z"
-        fill="rgba(20,38,32,.98)" stroke="rgba(230,196,115,.45)" stroke-width=".7"/>
-
-  <!-- 发簪 -->
-  <line x1="80" y1="30" x2="120" y2="26"
-        stroke="rgba(230,196,115,.95)" stroke-width="1.8" stroke-linecap="round"/>
-  <circle cx="120" cy="26" r="2.5" fill="rgba(230,196,115,1)"/>
-
-  <!-- 顶珠 -->
-  <circle cx="100" cy="13" r="4" fill="rgba(230,196,115,.95)">
-    <animate attributeName="opacity" values=".7;1;.7" dur="2.5s" repeatCount="indefinite"/>
-  </circle>
-
-  <!-- 闭目 -->
-  <path d="M86,50 Q90,54 94,50" stroke="rgba(232,238,240,.9)" stroke-width="1.4"
-        fill="none" stroke-linecap="round"/>
-  <path d="M106,50 Q110,54 114,50" stroke="rgba(232,238,240,.9)" stroke-width="1.4"
-        fill="none" stroke-linecap="round"/>
-
-  <!-- 眉心朱砂 -->
-  <circle cx="100" cy="40" r="1.6" fill="rgba(230,120,120,.85)"/>
-
-  <!-- 头顶灵气环 -->
-  <g class="halo-ring" style="transform-origin:100px 13px;">
-    <ellipse cx="100" cy="13" rx="24" ry="6" fill="none"
-             stroke="rgba(230,196,115,.55)" stroke-width="1"/>
-  </g>
-</svg>
-      </div>
     </div>
   </main>
 
-  <footer class="hud-bottom" style="position:relative;">
-    <button id="toggleHudBtn" style="position:absolute; top:-28px; right:10px; font-size:12px; background:transparent; border:1px dashed var(--dim); color:var(--dim); border-radius:8px; padding:2px 8px; cursor:pointer; z-index:99;">▼ 收起详情</button>
-    <div class="tianxiang-row" id="tianxiangRow">
-      <span class="tx-ic">☁️</span>
-      <span class="tx-name">平常日</span>
-      <span class="tx-desc">无特殊效果</span>
-      <span class="tx-time" id="txTime">—</span>
-    </div>
-    <div class="tianxiang-row buff-row" id="dailyBuffRow" style="display:none">
-      <span class="tx-ic">🔥</span>
-      <span class="tx-name">今日已毕</span>
-      <span class="tx-desc">全宗门修为 ×2</span>
-      <span class="tx-time" id="dailyBuffTime">—</span>
-    </div>
-    <div class="tianxiang-row exp-row" id="expeditionRow" style="display:none">
-      <span class="tx-ic">🧭</span>
-      <span class="tx-name" id="expName">外派中</span>
-      <span class="tx-desc" id="expDesc">—</span>
-      <span class="tx-time" id="expTime">—</span>
-    </div>
-        <div class="tianxiang-row world-row" id="worldBuffRow" style="display:none">
-      <span class="tx-ic" id="worldBuffIcon">✨</span>
-      <span class="tx-name" id="worldBuffName">天下buff</span>
-      <span class="tx-desc" id="worldBuffDesc">—</span>
-      <span class="tx-time" id="worldBuffTime">—</span>
-    </div>
-    <div class="tianxiang-row task-row" id="taskProgressRow" style="display:none;cursor:pointer">
-      <span class="tx-ic">📋</span>
-      <span class="tx-name" id="taskTodayText">今日 0/3</span>
-      <span class="tx-desc" id="taskWeekText">周 0/3</span>
-      <span class="tx-time">查看</span>
-    </div>
-    <div class="tianxiang-row world-row" id="moonOrderRow" style="cursor:pointer">
-      <span class="tx-ic" id="moonOrderIcon">🧘</span>
-      <span class="tx-name" id="moonOrderName">潜修</span>
-      <span class="tx-desc" id="moonOrderDesc">修为 +25%，毛 -15%</span>
-      <span class="tx-time" id="moonOrderTime">点击切换</span>
-    </div>
-    <div class="top-disciple-row">
-      <span class="td-label">首 席</span>
-      <span class="td-name" id="topDiscipleName">—</span>
-      <span class="td-realm" id="topDiscipleRealm"></span>
-      <span class="td-root" id="topDiscipleRoot" style="display:none"></span>
-      <span class="td-badge" id="topDiscipleChosen" style="display:none">✨ 天命</span>
-      <span class="td-injured" id="topDiscipleInjured" style="display:none">🩹 恢复中</span>
-      <span class="td-aging" id="topDiscipleAging" style="display:none">⏳ 寿元将尽</span>
-      <span class="td-away" id="topDiscipleAway" style="display:none">🧭 外派中</span>
-    </div>
-    <div class="dots-row" id="dotsRow">
-      <span class="dr-label">弟 子</span>
-      <div class="dr-dots" id="dotsBox"></div>
-      <span class="dr-count" id="dotsCount">1 / 1</span>
-    </div>
-    <div class="last-break-row" id="lastBreakRow" style="display:none">
-      <span class="lb-icon">⚡</span>
-      <span>最近突破</span>
-      <span class="lb-name" id="lastBreakName"></span>
-      <span class="lb-realm" id="lastBreakRealm"></span>
-      <span class="lb-time" id="lastBreakTime"></span>
-    </div>
-    <div class="item-status-row" id="itemStatusRow" style="display:none">
-      <span class="isr-item" id="isrBreakPill" style="display:none">🧪 破障丹待生效</span>
-      <span class="isr-item" id="isrTalentPill" style="display:none">📜 招贤令待生效</span>
-    </div>
-    <div class="phase-goal" id="phaseGoal" style="display:none">
-      <span class="pg-icon">🎯</span>
-      <span class="pg-text" id="phaseGoalText"></span>
-      <span class="pg-progress" id="phaseGoalProgress"></span>
-      <span class="pg-time" id="phaseGoalTime"></span>
-    </div>
-    <div class="bar-row">
-      <span class="bar-lbl">修为</span>
-      <div class="bar-outer">
-        <div class="bar-fill" id="sectExpFill"></div>
-        <div class="bar-text" id="sectExpText">0 / 100</div>
+    <footer class="hud-bottom">
+    <div class="rate-detail-wrap" id="rateDetailWrap" style="display:none">
+      <div class="rate-detail-toggle" id="rateDetailToggle">
+        <span>成功率明细</span>
+        <span class="rate-detail-arrow" id="rateDetailArrow">▸</span>
+      </div>
+      <div class="rate-detail-body" id="rateDetailBody">
+        <div class="rd-row"><span>基础成功率</span><span id="rdBase">--</span></div>
+        <div class="rd-row" id="rdDaoyunRow"><span>失败道韵</span><span id="rdDaoyun">+0%</span></div>
+        <div class="rd-row" id="rdXushiRow"><span>蓄势溢出</span><span id="rdXushi">+0%</span></div>
+        <div class="rd-row" id="rdXianyuanRow"><span>每日仙缘</span><span id="rdXianyuan">+0%</span></div>
+        <div class="rd-row" id="rdLianpoRow"><span>连续突破</span><span id="rdLianpo">+0%</span></div>
+        <div class="rd-row" id="rdTianxiangRow"><span>天象吉日</span><span id="rdTianxiang">+0%</span></div>
+        <div class="rd-row rd-total"><span>合计</span><span id="rdTotal">--</span></div>
       </div>
     </div>
-    <div class="bar-sub">
-      <span id="barSubLeft">炼气 一重</span>
-      <span id="barSubRight">距突破 约 —</span>
+    <div class="tut-hint" id="tutHint" style="display:none">
+      <div class="tut-hint-text">修为已满 · 点这里突破</div>
+      <div class="tut-hint-arrow">↓</div>
     </div>
-    <div class="info-bottom">
-      <div class="stone-wrap">
-        <span class="stone-icon">🪙</span>
-        <span class="stone-val" id="stoneText">100</span>
-        <span class="mini">毛</span>
-      </div>
-      <span class="report-time" id="nextReportEl">
-        <span>下次汇报</span>
-        <span class="rt-bar"><span class="rt-bar-fill" id="rtFill"></span></span>
-        <span id="rtText">01:00</span>
-      </span>
-    </div>
-    <div class="goal-bar">
-      <span class="gb-label">距 14 亿毛</span>
-      <div class="gb-outer"><div class="gb-fill" id="goalFill"></div></div>
-      <span class="gb-text" id="goalText">0.00%</span>
-    </div>
-    <div class="actions">
-      <button class="btn" id="btnSect">🔨 建 设</button>
-      <button class="btn" id="btnMijing">🗺️ 秘 境</button>
-      <button class="btn" id="btnExpedition">🧭 外 派</button>
-      <button class="btn" id="btnLijian">🏯 宗 门</button>
-    </div>
-    <div style="display:none">
-      <button class="btn gold" id="btnReport">批 阅 奏 章<span class="badge" id="memoBadge" style="display:none">0</span></button>
-      <button class="btn" id="btnRecruit">收 徒</button>
-    </div>
+    <button class="breakthrough-btn" id="breakthroughBtn">
+      <div class="bt-main" id="btMain">修 炼 中</div>
+      <div class="bt-sub" id="btSub">还需 --:--</div>
+    </button>
+  </footer>
+
 
 <div class="modal" id="modal"><div class="modal-card" id="modalCard"></div></div>
 <div class="tut-mask" id="tutMask"></div>
@@ -505,23 +179,16 @@ var _hmt = _hmt || [];
 <div class="tip-banner" id="tipBanner"></div>
 <div class="break-float" id="breakFloat"></div>
 <div class="char-bubble" id="charBubble"></div>
-<div id="breakthrough"><div class="bk-rays" id="bkRays"></div><div class="bk-card" id="bkCard"></div></div>
-<div id="achUnlock"><div class="ach-unlock-card" id="achUnlockCard"></div></div>
-<div id="ending" style="position:fixed;inset:0;z-index:260;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,rgba(230,196,115,.2) 0%,rgba(15,30,25,.95) 60%);backdrop-filter:blur(10px);opacity:0;pointer-events:none;transition:opacity .6s;padding:24px"><div id="endingCard" style="text-align:center;max-width:360px;width:100%;transform:scale(.9);transition:transform .6s cubic-bezier(.34,1.56,.64,1)"></div></div>
-<div id="firstRecruit">
-  <div class="fr-coin">🪙</div>
-  <div class="fr-line1">一 毛 拜 师</div>
-  <div class="fr-line2">一个年轻人站在山门前，<br>双手捧着一枚铜钱。</div>
-  <div class="fr-line3">「弟子只有一毛，请掌门收下。」</div>
-  <button class="fr-skip" id="frSkip">跳过</button>
-</div>
 <input type="file" id="importFileInput" accept=".txt,.json,.yimao,text/plain" style="display:none">
 
-<script src="data.js" defer></script>
-<script src="core.js" defer></script>
-<script src="systems.js" defer></script>
-<script src="ui.js" defer></script>
-<script src="main.js" defer></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="data.js"></script>\n<script src="data-gufeng.js"></script>
+<script src="core.js"></script>
+<script src="ui.js"></script>
+<script src="ui-sect.js"></script>
+<script src="main.js"></script>
+
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
