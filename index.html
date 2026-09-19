@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover,interactive-widget=resizes-content">
 <meta name="theme-color" content="#1f3a32">
-<title>一毛修仙 · 掌门</title>
+<title>一毛修仙</title>
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -37,14 +37,14 @@ var _hmt = _hmt || [];
 
 <div class="screen hide" id="create">
   <div class="create-panel">
-    <div class="create-title">立 宗</div>
-    <div class="create-sub">你是掌门，弟子替你走这条路</div>
-    <div class="field-label">掌 门 道 号</div>
+    <div class="create-title">入 道</div>
+    <div class="create-sub">孤身一人，独步红尘，自己给自己修仙。</div>
+    <div class="field-label">散 修 道 号</div>
     <div class="name-row">
-      <input class="name-input" id="nameInput" placeholder="无名掌门" maxlength="12">
+    <input class="name-input" id="nameInput" placeholder="无名散修" maxlength="12">
       <button class="random-btn" id="randomNameBtn"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--dim)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="9" cy="15" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="12" cy="12" r="1"/></svg></button>
     </div>
-    <button class="create-confirm" id="createConfirm" disabled>开 宗 立 派</button>
+<button class="create-confirm" id="createConfirm" disabled>踏 上 修 途</button>
     <div class="import-divider">已 有 存 档</div>
     <button class="import-link" id="importFromCreate"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>导 入 存 档</button>
     <div class="watermark wm-modal" style="border-top:none;padding-top:14px;opacity:.4" id="createVersion"></div>
@@ -100,7 +100,7 @@ var _hmt = _hmt || [];
   </svg>
 </div>
 <div class="watermark" id="gameWatermark">Zhao | Struct. E.</div>
-<button class="recruit-fab" id="gufengFab" title="红尘历练" style="top: calc(50% - 56px)"><span>📜</span></button>\n <button class="donate-fab" id="donateFab" title="赏我一毛"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><rect x="9.5" y="9.5" width="5" height="5"/></svg></button>
+<button class="recruit-fab" id="gufengFab" title="红尘历练" style="top: calc(50% - 56px)"><span>📜</span></button><button class="dongfu-fab" id="dongfuFab" title="洞府修行"><span>🏔️</span></button> <button class="donate-fab" id="donateFab" title="赏我一毛"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><rect x="9.5" y="9.5" width="5" height="5"/></svg></button>
   <div class="tianxiang-banner" id="tianxiangBanner"></div>
 
   <div class="menu-wrap">
@@ -124,6 +124,22 @@ var _hmt = _hmt || [];
         <div class="exp-bar-fill" id="expBarFill"></div>
         <div class="exp-bar-text" id="expBarText">0 / 1,800</div>
       </div>
+      <div class="dongfu-bar" id="dongfuBar" style="display:none">
+        <div class="db-left">
+          <span class="db-icon" id="dongfuBarIcon">🧘</span>
+          <div class="db-info">
+            <div class="db-name" id="dongfuBarName">吐纳打坐</div>
+            <div class="db-effect" id="dongfuBarEffect">修为 +50%</div>
+          </div>
+        </div>
+        <div class="db-right">
+          <div class="db-time" id="dongfuBarTime">24分</div>
+          <div class="db-progress">
+            <div class="db-progress-fill" id="dongfuBarProgress"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="exp-meta-row">
         <div class="exp-rate" id="expRate">+1.0 修为/秒</div>
         <div class="tianjishi-display" id="tianjishiDisplay">

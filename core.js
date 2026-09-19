@@ -22,6 +22,14 @@ const el={
   tianxiangBanner:$('tianxiangBanner'),
   particles:$('particles'),
   gufengFab:$('gufengFab'),
+  dongfuFab:$('dongfuFab'),
+  dongfuBar:$('dongfuBar'),
+  dongfuBarIcon:$('dongfuBarIcon'),
+  dongfuBarName:$('dongfuBarName'),
+  dongfuBarEffect:$('dongfuBarEffect'),
+  dongfuBarTime:$('dongfuBarTime'),
+  dongfuBarProgress:$('dongfuBarProgress'),
+  soundQuickBtn:$('soundQuickBtn'),
   soundQuickBtn:$('soundQuickBtn'),
   modal:$('modal'),modalCard:$('modalCard'),flash:$('flash'),toast:$('toast'),
   menuBtn:$('menuBtn'),menuPop:$('menuPop'),
@@ -81,7 +89,8 @@ function createDefaultState(){
     tutorialDone:false,
     firstBreakthroughDone:false,   // 是否完成过第一次突破
     // 历史
-chronicle:[], gufengCount:0, gufengDate:'', gufengNextAt:0, toldTalkIds:[]
+chronicle:[], gufengCount:0, gufengDate:'', gufengNextAt:0, toldTalkIds:[],
+dongfuNextAt:0, dongfuChoice:''
   };
 }
 
@@ -125,8 +134,8 @@ function serializeState(){
     powerSave:s.powerSave,
     tutorialDone:s.tutorialDone,
     firstBreakthroughDone:s.firstBreakthroughDone,
-    chronicle:s.chronicle, gufengCount:s.gufengCount, gufengDate:s.gufengDate, gufengNextAt:s.gufengNextAt, toldTalkIds:s.toldTalkIds,
-    gameVersion:GAME_VERSION
+chronicle:s.chronicle, gufengCount:s.gufengCount, gufengDate:s.gufengDate, gufengNextAt:s.gufengNextAt, toldTalkIds:s.toldTalkIds,
+dongfuNextAt:s.dongfuNextAt, dongfuChoice:s.dongfuChoice,
   };
 }
 
@@ -185,6 +194,7 @@ function applySaveData(data){
     s.tutorialDone=!!data.tutorialDone;
     s.firstBreakthroughDone=!!data.firstBreakthroughDone;
     s.chronicle=Array.isArray(data.chronicle)?data.chronicle:[]; s.gufengCount=typeof data.gufengCount==='number'?data.gufengCount:0; s.gufengDate=data.gufengDate||''; s.gufengNextAt=typeof data.gufengNextAt==='number'?data.gufengNextAt:0; s.toldTalkIds=Array.isArray(data.toldTalkIds)?data.toldTalkIds:[];
+s.dongfuNextAt=typeof data.dongfuNextAt==='number'?data.dongfuNextAt:0; s.dongfuChoice=data.dongfuChoice||'';
     applyFontSize();renderSplashStory();save();
   }catch(e){console.error('存档导入失败',e)}
 }

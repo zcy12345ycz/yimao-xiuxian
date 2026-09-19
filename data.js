@@ -24,7 +24,7 @@ const _ICON={
 
 /* ============ 方言 ============ */
 const TX={
-splash_story:{std:'六岁那年，你算了一笔账：<br>中国有14亿人，要是每人给你一毛钱……<br><span class="hl">你就成14亿毛咯。</span><span class="pause"></span>你兴奋得一夜没睡。<span class="pause"></span>后来你长大了，才晓得没得哪个会给你一毛钱。<span class="pause"></span>于是你决定修仙，<br>不图别的，就图个自己搞钱自己花。<br>并立下大志：<span class="hl">老子一个人，也要在红尘里搞到14亿毛！</span>',sc:'六岁那年，你算了一笔账：<br>中国有14亿人，要是每人给你一毛钱……<br><span class="hl">你就成14亿毛咯。</span><span class="pause"></span>你兴奋得一夜没睡。<span class="pause"></span>后来你长大了，才晓得没得哪个会给你一毛钱。<span class="pause"></span>于是你决定修仙，<br>不图别的，就图个自己搞钱自己花。<br>并立下大志：<span class="hl">老子一个人，也要在红尘里搞到14亿毛！</span>'},
+  splash_story:{std:'六岁那年，你算了一笔账：<br>中国有14亿人，如果每人给你一毛钱……<br><span class="hl">你就成14亿毛了。</span><span class="pause"></span>你兴奋得一夜没睡。<span class="pause"></span>后来你长大了，才发现没有人会白给你一毛钱。<span class="pause"></span>于是你决定修仙，<br>因为师父说过：<span class="hl">修成仙人，便能点石成金。</span><br>你立下大志：<span class="hl">先成仙，再把那14亿毛全赚回来！</span>',sc:'六岁那年，你算了一笔账：<br>中国有14亿人，要是每人给你一毛钱……<br><span class="hl">你就成14亿毛咯。</span><span class="pause"></span>你兴奋得一夜没睡。<span class="pause"></span>后来你长大了，才晓得没得哪个会白给你一毛钱。<span class="pause"></span>于是你决定修仙，<br>因为师父说过：<span class="hl">修成仙人，便能点石成金。</span><br>你立下大志：<span class="hl">先成仙，再把那14亿毛全赚回来！</span>'},
   first_meet_1:{std:'一个年轻人站在山门前，手里捧着一枚铜钱。',sc:'一个年轻人站到山门前，手头捧到一枚铜钱。'},
   first_meet_2:{std:'「掌门，弟子只有一毛，请掌门收下。」',sc:'「掌门，弟子只有一毛，请掌门收下。」'},
   master_reply_1:{std:'入我门来，便是一家人。',sc:'进门就是一家人咯。'},
@@ -218,3 +218,131 @@ function fmtNum(n) {
   }
   return Math.floor(n).toString();
 }
+
+/* ============ 洞府修行 ============ */
+const DONGFU_INTERVAL = 30 * 60 * 1000; // 30 分钟刷新一次
+
+const DONGFU_ROUTES = [
+  {
+    id: 'dazuo',
+    n: '吐纳打坐',
+    ic: '🧘',
+    desc: '老老实实打坐，啥子都不想。',
+    effect: '修为 +50%'
+  },
+  {
+    id: 'gaoqian',
+    n: '下山搞钱',
+    ic: '💰',
+    desc: '去山下摆个算命摊子，顺便看看能不能捞点偏门。',
+    effect: '天机石翻倍'
+  },
+  {
+    id: 'liandan',
+    n: '炼丹采药',
+    ic: '🌿',
+    desc: '去后山挖点草草，炼点丹药补身子。',
+    effect: '修为 +20% · 突破 +3%'
+  }
+];
+
+// 修为倍率
+function getDongfuRateMult() {
+  if (s.dongfuChoice === 'dazuo') return 1.5;
+  if (s.dongfuChoice === 'liandan') return 1.2;
+  return 1.0;
+}
+
+// 突破加成
+function getDongfuBreakBonus() {
+  if (s.dongfuChoice === 'liandan') return 0.03;
+  return 0;
+}
+
+// 天机石掉落间隔倍率（小于 1 表示加快）
+function getDongfuTianjishiMult() {
+  if (s.dongfuChoice === 'gaoqian') return 0.5;
+  return 1.0;
+}
+
+/* ============ 洞府 · 随机奇遇 ============ */
+const DONGFU_EVENT_CHANCE = 0.20;   // 20% 概率触发
+
+const DONGFU_EVENTS = [
+  {
+    id: 'beggar',
+    n: '乞丐塞破铜钱',
+    ic: '🥺',
+    desc: '洞府外，一个老乞丐拦住你，硬塞给你一枚破铜钱。他嘴里念叨着「拿着，会有用的」。',
+    options: [
+      {
+        text: '收下（修为 +2%）',
+        apply: () => {
+          const gain = Math.floor(getExpNeeded(s.realm, s.layer) * 0.02);
+          s.exp += gain;
+          toast('修为 +' + fmtNum(gain), 2000);
+        }
+      },
+      {
+        text: '拒绝（道韵 +2%）',
+        apply: () => {
+          s.daoyun = Math.min(DAOYUN_CAP, s.daoyun + 0.02);
+          toast('道韵 +2%', 2000);
+        }
+      }
+    ]
+  },
+  {
+    id: 'meteor',
+    n: '陨石砸坏炼丹炉',
+    ic: '☄️',
+    desc: '一颗陨石从天而降，砸烂了你的炼丹炉。炉子里还剩点余烬，旁边散落些碎石。',
+    options: [
+      {
+        text: '去挖矿（天机石 +1）',
+        apply: () => {
+          if(s.tianjishi >= TIANJISHI_CAP){
+            toast('天机石已满', 2000);
+          } else {
+            s.tianjishi = Math.min(TIANJISHI_CAP, s.tianjishi + 1);
+            toast('💎 天机石 +1', 2000);
+          }
+        }
+      },
+      {
+        text: '修炉子（修为 +5%）',
+        apply: () => {
+          const gain = Math.floor(getExpNeeded(s.realm, s.layer) * 0.05);
+          s.exp += gain;
+          toast('修为 +' + fmtNum(gain), 2000);
+        }
+      }
+    ]
+  },
+  {
+    id: 'yelling',
+    n: '瓜娃子叫骂',
+    ic: '😡',
+    desc: '一个瓜娃子站在洞府门口，扯着嗓子骂你，从你师父骂到你家十八代祖宗。',
+    options: [
+      {
+        text: '出去揍他一顿（道韵清零 · 修为 +3%）',
+        apply: () => {
+          s.daoyun = 0;
+          const gain = Math.floor(getExpNeeded(s.realm, s.layer) * 0.03);
+          s.exp += gain;
+          toast('心念通达 · 修为 +' + fmtNum(gain), 2000);
+        }
+      },
+      {
+        text: '忍气吞声（道韵 +5%）',
+        apply: () => {
+          s.daoyun = Math.min(DAOYUN_CAP, s.daoyun + 0.05);
+          toast('道韵 +5%', 2000);
+        }
+      }
+    ]
+  }
+];
+
+

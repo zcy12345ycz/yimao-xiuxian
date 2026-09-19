@@ -42,7 +42,7 @@ function tickCultivation(now){
   lastCultivateT=now;
   if(dt<=0)return;
   const realDt=Math.min(dt,5);   // 防止切页面时爆量
-  s.exp+=realDt*CULTIVATE_RATE_ONLINE;
+s.exp+=realDt*CULTIVATE_RATE_ONLINE*getDongfuRateMult();
   checkTianjishiDrop(now);
   refreshTianxiang(); checkGufengRefresh(now);
 }
@@ -70,17 +70,16 @@ function checkGufengRefresh(now){
       // 时间到了，什么都不做，让按钮保持亮起状态！
       // 绝对不要在这里修改 s.gufengNextAt
     } else {
-      s.gufengNextAt = now + 2 * 3600 * 1000;
+    s.gufengNextAt = now;
     }
   }
 }
 
 function scheduleNextTianjishi(now){
-  const min=TIANJISHI_ONLINE_MIN,max=TIANJISHI_ONLINE_MAX;
+  const m = getDongfuTianjishiMult();
+  const min=TIANJISHI_ONLINE_MIN*m, max=TIANJISHI_ONLINE_MAX*m;
   s.nextTianjishiAt=now+min+Math.random()*(max-min);
 }
-
-
 
 
 /* ============ 离线结算 ============ */
@@ -88,20 +87,27 @@ function settleOffline(hoursAway){
   if(!s.created)return null;
   const offlineHours=Math.min(hoursAway,OFFLINE_CAP_HOURS);
   const offlineSeconds=offlineHours*3600;
+
+  // 洞府加成（离线前选的路线，全程生效）
+  const dongfuMult   = (typeof getDongfuRateMult === 'function') ? getDongfuRateMult() : 1;
+  const dongfuTjMult = (typeof getDongfuTianjishiMult === 'function') ? getDongfuTianjishiMult() : 1;
+  const hasDongfu    = !!s.dongfuChoice && (dongfuMult > 1 || dongfuTjMult < 1);
+
   // 修为
-  const expGain=offlineSeconds*CULTIVATE_RATE_OFFLINE;
-  s.exp+=expGain;
-  // 天机石：期望 2 小时 1 颗，±50% 波动
-  const expectedStones=offlineHours/2;
-  let stones=Math.round(expectedStones);
-  stones=Math.max(0,stones+Math.floor(Math.random()*2)-1);
-  stones=Math.min(stones,TIANJISHI_CAP-s.tianjishi);
-  s.tianjishi+=stones;
-  // 判断是否足以突破
-  const needed=getExpNeeded(s.realm,s.layer);
-  const canBreak=s.exp>=needed;
-  const overflowRatio=needed>0?(s.exp-needed)/needed:0;
-  return {expGain,stones,offlineHours,canBreak,overflowRatio};
+  const expGain = offlineSeconds * CULTIVATE_RATE_OFFLINE * dongfuMult;
+  s.exp += expGain;
+
+  // 天机石：期望 2 小时 1 颗，±50% 波动，洞府"下山搞钱"减半间隔
+  const expectedStones = (offlineHours / 2) * dongfuTjMult;
+  let stones = Math.round(expectedStones);
+  stones = Math.max(0, stones + Math.floor(Math.random() * 2) - 1);
+  stones = Math.min(stones, TIANJISHI_CAP - s.tianjishi);
+  s.tianjishi += stones;
+
+  const needed = getExpNeeded(s.realm, s.layer);
+  const canBreak = s.exp >= needed;
+  const overflowRatio = needed > 0 ? (s.exp - needed) / needed : 0;
+  return { expGain, stones, offlineHours, canBreak, overflowRatio, dongfuMult, dongfuTjMult, hasDongfu };
 }
 
 /* ============ 突破成功率计算 ============ */
@@ -125,6 +131,10 @@ function calcRate(tianjishiUsed){
   }
   // 天机石（玩家主动选择的数量）
   rate+=Math.min(tianjishiUsed,TIANJISHI_CAP)*TIANJISHI_BONUS_PER;
+
+// 洞府修行
+rate+=getDongfuBreakBonus();
+
   // 天象
   if(isTianxiangDay())rate+=TIANXIANG_BONUS;
   // 上限
@@ -215,6 +225,9 @@ function showOfflineReport(result){
   html += '<div class="og-item">';
   html += '<div class="og-label">修为</div>';
   html += '<div class="og-value up">+'+fmtNum(result.expGain)+'</div>';
+  if(result.hasDongfu && result.dongfuMult > 1){
+    html += '<div class="og-sub">洞府 ×' + result.dongfuMult.toFixed(1) + '</div>';
+  }
   html += '</div>';
   
   // 天机石
@@ -222,6 +235,9 @@ function showOfflineReport(result){
     html += '<div class="og-item">';
     html += '<div class="og-label">天机石</div>';
     html += '<div class="og-value gold">💎 +'+result.stones+'</div>';
+    if(result.hasDongfu && result.dongfuTjMult < 1){
+      html += '<div class="og-sub">洞府加速</div>';
+    }
     html += '</div>';
   }
   
@@ -293,14 +309,14 @@ el.startBtn.onclick=(e)=>{
     el.nameInput.focus();
   },600);
 };
-el.randomNameBtn.onclick=(e)=>{e.stopPropagation();AudioSys.click();el.nameInput.value=pick(['无名掌门','青云子','玄机子','太虚道人','问天真人','忘尘道人','拂尘子','守拙道人','静虚子','抱朴子']);updateCreate()};
+el.randomNameBtn.onclick=(e)=>{e.stopPropagation();AudioSys.click();el.nameInput.value=pick(['王二娃','李幺妹','张狗蛋','刘三娃','赵大牛','陈二娃','周小妹','吴幺儿','郑铁柱','冯二狗']);updateCreate()};
 el.nameInput.addEventListener('input',updateCreate);
 function updateCreate(){el.createConfirm.disabled=!el.nameInput.value.trim()}
 el.importFromCreate.onclick=(e)=>{e.stopPropagation();AudioSys.click();openImport()};
 el.createConfirm.onclick=(e)=>{
   e.stopPropagation();
   AudioSys.click();
-  s.masterName=el.nameInput.value.trim()||'无名掌门';
+  s.masterName=el.nameInput.value.trim()||'无名散修';
   s.created=true;
   s.createdAt=Date.now();
   s.lastVisit=Date.now();
@@ -380,6 +396,14 @@ function init(){
   if(el.splashVersion)el.splashVersion.textContent=GAME_VERSION+' · '+GAME_AUTHOR;
   ensureAudioInit();
   initSupabase();
+  // 自动检测手机端并开启省电模式
+  if (/(Android|iPhone|iPad|iPod|Mobile)/i.test(navigator.userAgent)) {
+    if (s.powerSave === false) {
+      s.powerSave = true;
+      document.body.classList.add('power-save');
+      save();
+    }
+  }
   if(loaded&&s.created){
     const now=Date.now();
     // 离线结算
@@ -410,7 +434,7 @@ function init(){
     }
   }
 }
-setInterval(gameLoop,500);
+setInterval(gameLoop, 1000);
 init();
 
 
@@ -478,17 +502,40 @@ if (el.menuInstall) {
     AudioSys.click();
     hideMenu();
     
-    if (!deferredInstallPrompt) {
-      toast('已添加到桌面，或当前浏览器不支持');
+    // 1. 安卓/Chrome 等支持自动安装的浏览器
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      const { outcome } = await deferredInstallPrompt.userChoice;
+      if (outcome === 'accepted') {
+        toast('已成功添加到桌面');
+      }
+      deferredInstallPrompt = null;
       return;
     }
-    // 调出浏览器安装弹窗
-    deferredInstallPrompt.prompt();
-    const { outcome } = await deferredInstallPrompt.userChoice;
-    if (outcome === 'accepted') {
-      toast('已成功添加到桌面');
+
+    // 2. 苹果/微信/不支持的浏览器，弹窗教玩家手动添加
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+    
+    let html = '<div class="modal-title">添 加 到 桌 面</div>';
+    html += '<div class="tip-box good" style="text-align:left;line-height:1.8">';
+    if (isWechat) {
+      html += '微信自带的浏览器不支持直接添加。<br>请点击右上角 <span class="hl">···</span> 按钮，然后选择 <span class="hl">在浏览器中打开</span>，再进行添加。';
+    } else if (isIOS) {
+      html += '苹果手机需要手动添加：<br>1. 点击屏幕下方中间的 <span class="hl">分享按钮</span>（一个方块加个向上箭头）<br>2. 在弹出的菜单里找到 <span class="hl">添加到主屏幕</span><br>3. 点击右上角的 <span class="hl">添加</span> 就可以咯！';
+    } else {
+      html += '您当前的浏览器不支持自动添加。<br>请点击浏览器菜单（通常是右上角或右下角），找到 <span class="hl">添加到主屏幕</span> 或 <span class="hl">安装应用</span> 选项。';
     }
-    deferredInstallPrompt = null;
+    html += '</div>';
+    html += '<button class="btn gold" style="width:100%;padding:15px;margin-top:14px" id="installGuideOk">晓得了</button>';
+    html += '<div class="watermark wm-modal">' + GAME_AUTHOR + '</div>';
+    
+    showModal(html);
+    $('installGuideOk').onclick = (ev) => {
+      ev.stopPropagation();
+      AudioSys.click();
+      hideModal();
+    };
   };
 }
 

@@ -60,8 +60,11 @@ function renderUI(){
   if(el.expBarFill)el.expBarFill.style.width = pct + '%';
   if(el.expBarText)el.expBarText.textContent = fmtNum(Math.floor(s.exp)) + ' / ' + fmtNum(needed);
   if(el.expRate){
-    const rate = CULTIVATE_RATE_ONLINE;
-    el.expRate.textContent = '+' + rate.toFixed(1) + ' 修为/秒';
+    const mult = (typeof getDongfuRateMult === 'function') ? getDongfuRateMult() : 1;
+    const rate = CULTIVATE_RATE_ONLINE * mult;
+    let suffix = '';
+    if(mult > 1) suffix = ' · 洞府 ×' + mult.toFixed(1);
+    el.expRate.textContent = '+' + rate.toFixed(1) + ' 修为/秒' + suffix;
   }
   // 天机石数量
   if(el.tianjishiCount){
@@ -107,6 +110,42 @@ function renderUI(){
       el.gufengFab.classList.add('ready');
     } else {
       el.gufengFab.classList.remove('ready');
+    }
+  }
+  // 洞府修行按钮状态
+  if(el.dongfuFab){
+    const now = Date.now();
+    const ready = !s.dongfuNextAt || now >= s.dongfuNextAt;
+    el.dongfuFab.classList.toggle('ready', ready);
+    const cur = DONGFU_ROUTES.find(r => r.id === s.dongfuChoice);
+    el.dongfuFab.title = cur ? ('洞府修行：' + cur.n) : '洞府修行';
+  }
+  // 洞府修行 · 状态条
+  if(el.dongfuBar){
+    const cur = DONGFU_ROUTES.find(r => r.id === s.dongfuChoice);
+    if(cur && s.dongfuNextAt){
+      const now = Date.now();
+      const total = DONGFU_INTERVAL;
+      const remainMs = Math.max(0, s.dongfuNextAt - now);
+      const remainMin = Math.ceil(remainMs / 60000);
+      const pct = Math.min(100, Math.max(0, ((total - remainMs) / total) * 100));
+      const isReady = remainMs <= 0;
+
+      if(el.dongfuBarIcon) el.dongfuBarIcon.textContent = cur.ic;
+      if(el.dongfuBarName) el.dongfuBarName.textContent = cur.n;
+      if(el.dongfuBarEffect) el.dongfuBarEffect.textContent = cur.effect;
+      if(el.dongfuBarTime) el.dongfuBarTime.textContent = isReady ? '可换' : (remainMin + '分');
+      if(el.dongfuBarProgress) el.dongfuBarProgress.style.width = pct + '%';
+
+      el.dongfuBar.classList.toggle('ready', isReady);
+      el.dongfuBar.style.display = '';
+      el.dongfuBar.onclick = (e) => {
+        e.stopPropagation();
+        AudioSys.click();
+        openDongfu();
+      };
+    } else {
+      el.dongfuBar.style.display = 'none';
     }
   }
 }
@@ -241,13 +280,17 @@ function openDonate(){
 function openHelp(){
   let html='<div class="modal-title">玩 法 说 明</div>';
   
-  html+='<div class="help-section"><div class="help-h">🧘 核心玩法</div><div class="help-p">挂机积累修为。<br>修为满了，点底部的「突破」按钮。<br>突破了，继续挂机。<br><br><span class="hl">在线挂机 ×1.0，离线挂机 ×0.4，离线结算上限 12 小时。</span></div></div>';
+html+='<div class="help-section"><div class="help-h">🧘 核心玩法</div><div class="help-p">挂机积累修为。<br>修为满了，点底部的「突破」按钮。<br>突破了，继续挂机。<br><br><span class="hl">在线挂机 ×1.0，离线挂机 ×0.4，离线结算上限 12 小时。</span><br><br>每 30 分钟可以点右下角 🏔️ 选一条洞府路线，<br>加成持续到下次刷新，<span class="hl">挂机也能躺赚</span>。</div></div>';
   
   html+='<div class="help-section"><div class="help-h">💎 天机石</div><div class="help-p">挂机随机掉落：<br>· 在线每 <span class="hl">15-45 分钟</span> 掉 1 颗<br>· 离线每 <span class="hl">1-3 小时</span> 掉 1 颗<br>· 持有上限 <span class="hl">10 颗</span><br><br>突破时可以消耗：<br>· 每颗 <span class="hl">+5% 成功率</span><br>· 最多用 10 颗 <span class="hl">+50%</span></div></div>';
   
   html+='<div class="help-section"><div class="help-h">⚡ 突破成功率</div><div class="help-p">基础成功率随境界递减。<br>但可以通过以下方式提高：<br><span class="hl">失败道韵</span>：每次失败 +2%，上限 +20%<br><span class="hl">蓄势溢出</span>：修为满后继续挂机，每溢出 1 倍 +3%，上限 +15%<br><span class="hl">每日仙缘</span>：每天首次突破 +15%<br><span class="hl">连续突破</span>：连破 3/5/7/9 次分别 +5/10/15/20%<br><span class="hl">天机石</span>：每颗 +5%，最多用 10 颗<br><span class="hl">天象吉日</span>：每月随机 1-3 天 +20%<br><br>成功率上限 <span class="hl">95%</span>，大境界突破上限 <span class="hl">80%</span>。<br>失败返还 50% 修为，并累积道韵。</div></div>';
   
 html+='<div class="help-section"><div class="help-h">📜 红尘炼心</div><div class="help-p">在线每 <span class="hl">2 小时</span> 刷新一次见闻，每天最多 <span class="hl">5 次</span>。<br>面对内心的抉择，选择你的态度。<br>答完一题即可获得 <span class="hl">当前升级所需修为的 20%</span> 作为奖励。<br>题库会优先按主线顺序出现，随后随机抽取日常见闻。</div></div>';
+
+  html+='<div class="help-section"><div class="help-h">🏔️ 洞府修行</div><div class="help-p">在线每 <span class="hl">30 分钟</span> 刷新一次路线，右下角紫色按钮会脉冲提醒。<br>选一条路线，接下来 30 分钟享受对应加成：<br><span class="hl">🧘 吐纳打坐</span>：修为 +50%<br><span class="hl">💰 下山搞钱</span>：天机石掉落间隔减半<br><span class="hl">🌿 炼丹采药</span>：修为 +20%，突破成功率 +3%<br><br>冷却期间不能换路线，<span class="hl">但加成一直在跑</span>。<br>主界面修为条旁会显示当前路线和剩余分钟。</div></div>';
+
+  html+='<div class="help-section"><div class="help-h">🎲 机缘巧遇</div><div class="help-p">每次洞府刷新时，有 <span class="hl">20% 概率</span> 触发奇遇：<br>· 乞丐塞破铜钱<br>· 陨石砸坏炼丹炉<br>· 瓜娃子叫骂<br><br>每个奇遇两个选项，各有不同奖励（修为 / 道韵 / 天机石）。<br>奇遇结束后再选洞府路线。</div></div>';
 
   html+='<div class="help-section"><div class="help-h">🎯 长线目标</div><div class="help-p">练气 → 筑基 → 金丹 → 元婴 → 化神<br>→ 炼虚 → 合体 → 大乘 → 渡劫 → 仙人<br><br>每境 9 层，共 <span class="hl">90 层</span>。<br>慢慢来，不急。</div></div>';
   
@@ -882,7 +925,7 @@ document.addEventListener('keydown', (e) => {
   if(!btn) return;
   
   let idleTimer = null;
-  const IDLE_DELAY = 5000;  // 5 秒不点就变暗
+  const IDLE_DELAY = 5000;
   
   function setIdle(){
     btn.classList.add('idle');
@@ -893,13 +936,143 @@ document.addEventListener('keydown', (e) => {
     idleTimer = setTimeout(setIdle, IDLE_DELAY);
   }
   
-  // 初始化：进入页面 5 秒后变暗
   resetIdle();
-  
-  // 触摸/点击按钮 → 恢复，再倒计时
   btn.addEventListener('touchstart', resetIdle, { passive: true });
   btn.addEventListener('click', resetIdle);
-  
-  // 鼠标悬停（电脑）→ 恢复
   btn.addEventListener('mouseenter', resetIdle);
 })();
+
+/* ============ 洞府修行 ============ */
+function openDongfu(){
+  const now = Date.now();
+  const ready = !s.dongfuNextAt || now >= s.dongfuNextAt;
+
+  // 冷却中：直接看当前状态
+  if(!ready){
+    openDongfuRouteSelect();
+    return;
+  }
+
+  // 就绪状态：20% 概率先触发奇遇
+  if(Math.random() < DONGFU_EVENT_CHANCE){
+    openDongfuEvent(() => openDongfuRouteSelect());
+  } else {
+    openDongfuRouteSelect();
+  }
+}
+
+/* ============ 洞府 · 奇遇弹窗 ============ */
+function openDongfuEvent(onComplete){
+  const ev = DONGFU_EVENTS[Math.floor(Math.random() * DONGFU_EVENTS.length)];
+
+  let html = '<div class="modal-title" style="color:var(--purple)">机 缘 巧 遇</div>';
+  html += '<div class="modal-sub">洞府之外，偶遇一桩小事</div>';
+  html += '<div class="event-box chain" style="margin-top:8px">';
+  html += '<div class="event-ask">';
+  html += '<div style="font-size:40px;text-align:center;margin-bottom:10px">' + ev.ic + '</div>';
+  html += '<div style="text-align:center;font-weight:700;color:var(--gold);margin-bottom:10px;letter-spacing:2px">' + ev.n + '</div>';
+  html += '<div style="line-height:1.9">' + ev.desc + '</div>';
+  html += '</div>';
+  html += '<div class="gift-choice">';
+  ev.options.forEach((opt, i) => {
+    html += '<button class="gift-opt" data-opt="' + i + '">';
+    html += '<div class="go-icon">' + (i === 0 ? '👊' : '🧘') + '</div>';
+    html += '<div class="go-info"><div class="go-name">' + opt.text + '</div></div>';
+    html += '</button>';
+  });
+  html += '</div></div>';
+  html += '<div class="watermark wm-modal">' + GAME_AUTHOR + '</div>';
+
+  showModal(html, { noClose: true });
+
+  document.querySelectorAll('[data-opt]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const i = parseInt(btn.dataset.opt);
+      AudioSys.success();
+      ev.options[i].apply();
+      save();
+      hideModal();
+      setTimeout(() => {
+        renderUI();
+        if(typeof onComplete === 'function') onComplete();
+      }, 420);
+    };
+  });
+}
+
+/* ============ 洞府 · 路线选择弹窗 ============ */
+function openDongfuRouteSelect(){
+  const now = Date.now();
+  const ready = !s.dongfuNextAt || now >= s.dongfuNextAt;
+
+  let html = '<div class="modal-title">洞 府 修 行</div>';
+  html += '<div class="modal-sub">' + (ready ? '选一条路，接下来 30 分钟事半功倍' : '修行途中，静待时机') + '</div>';
+
+  const cur = DONGFU_ROUTES.find(r => r.id === s.dongfuChoice);
+  if(cur){
+    const remain = s.dongfuNextAt ? Math.max(0, Math.ceil((s.dongfuNextAt - now) / 60000)) : 0;
+    html += '<div class="tip-box good" style="text-align:center">';
+    html += '当前：' + cur.ic + ' <span class="hl">' + cur.n + '</span><br>';
+    html += '<span style="font-size:calc(12px * var(--fs-scale))">' + cur.effect + '</span>';
+    if(!ready && remain > 0){
+      html += '<br><span style="color:var(--dim);font-size:calc(11px * var(--fs-scale))">还需 ' + remain + ' 分钟才能换</span>';
+    }
+    html += '</div>';
+  } else {
+    html += '<div class="tip-box" style="text-align:center">还没选路线，随便选一个吧</div>';
+  }
+
+  html += '<div class="gift-choice" style="margin-top:14px">';
+  DONGFU_ROUTES.forEach(r => {
+    const isCurrent = r.id === s.dongfuChoice;
+    const cls = 'gift-opt'
+      + (isCurrent ? ' selected' : '')
+      + (!ready && !isCurrent ? ' locked' : '');
+    html += '<button class="' + cls + '" data-route="' + r.id + '"'
+          + (!ready ? ' disabled' : '') + '>';
+    html += '<div class="go-icon">' + r.ic + '</div>';
+    html += '<div class="go-info"><div class="go-name">' + r.n + '</div><div class="go-desc">' + r.desc + '</div></div>';
+    html += '<div class="go-cost">' + r.effect + '</div>';
+    html += '</button>';
+  });
+  html += '</div>';
+
+  html += '<div class="watermark wm-modal">' + GAME_AUTHOR + '</div>';
+  showModal(html);
+
+  if(ready){
+    // 冷却就绪：可以选
+    document.querySelectorAll('[data-route]').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.route;
+        s.dongfuChoice = id;
+        s.dongfuNextAt = Date.now() + DONGFU_INTERVAL;
+        save();
+        AudioSys.success();
+        hideModal();
+        const r = DONGFU_ROUTES.find(x => x.id === id);
+        toast('洞府修行：' + r.n + ' · ' + r.effect, 2600);
+        renderUI();
+      };
+    });
+  } else {
+    // 冷却中：点啥都提示
+    document.querySelectorAll('[data-route]').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const remain = Math.ceil((s.dongfuNextAt - Date.now()) / 60000);
+        toast('还需 ' + remain + ' 分钟才能换', 2000);
+      };
+    });
+  }
+}
+
+if(el.dongfuFab){
+  el.dongfuFab.onclick = (e) => {
+    e.stopPropagation();
+    AudioSys.click();
+    openDongfu();
+  };
+}
